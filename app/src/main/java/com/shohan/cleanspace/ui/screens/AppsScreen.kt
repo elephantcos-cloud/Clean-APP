@@ -56,7 +56,7 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("App-wise Storage") },
+                title = { Text("App Manager") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
@@ -70,10 +70,10 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
             if (!shizukuReady) {
                 Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("সব App-এর Cache এক ক্লিকে Clean করতে", style = MaterialTheme.typography.titleMedium)
+                        Text("One-tap cache clearing", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Shizuku activate করো। এটা ছাড়া প্রতিটা App-এর cache আলাদাভাবে clear করতে হবে (নিচে প্রতিটার পাশে ইনফো বাটন দেওয়া আছে)।",
+                            "Activate Shizuku to clear all app caches at once. Without it, you can still open each app's settings individually.",
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(Modifier.height(12.dp))
@@ -87,14 +87,14 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                                                 android.net.Uri.parse("https://shizuku.rikka.app/download/")
                                             )
                                         )
-                                    }) { Text("Shizuku Install করো") }
+                                    }) { Text("Install Shizuku") }
                                 }
                                 !permissions.shizukuRunning -> {
-                                    Text("Shizuku ইনস্টল আছে কিন্তু চালু নেই — README.md দেখো চালু করার উপায়ের জন্য")
+                                    Text("Shizuku is installed but not running — open Shizuku and tap Start")
                                 }
                                 else -> {
                                     Button(onClick = { viewModel.requestShizukuPermission() }) {
-                                        Text("Permission দাও")
+                                        Text("Grant Permission")
                                     }
                                 }
                             }
@@ -111,7 +111,7 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                     Spacer(Modifier.width(8.dp))
                     Text(
                         if (bulkProgress != null) "Cleaning... ${bulkProgress!!.first}/${bulkProgress!!.second}"
-                        else "সব App-এর Cache Clean করো"
+                        else "Clear Cache — All Apps"
                     )
                 }
             }
@@ -140,7 +140,7 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(app.appName, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                                         Text(
-                                            "Cache: ${MainViewModel.formatBytes(app.cacheBytes)}  •  মোট: ${MainViewModel.formatBytes(app.totalBytes)}",
+                                            "Cache: ${MainViewModel.formatBytes(app.cacheBytes)}  •  Total: ${MainViewModel.formatBytes(app.totalBytes)}",
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                     }

@@ -53,13 +53,13 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
 
             ThemeOption("Light", ThemeMode.LIGHT, themeMode) { viewModel.setThemeMode(it) }
             ThemeOption("Dark", ThemeMode.DARK, themeMode) { viewModel.setThemeMode(it) }
-            ThemeOption("System Default", ThemeMode.SYSTEM, themeMode) { viewModel.setThemeMode(it) }
+            ThemeOption("Follow System", ThemeMode.SYSTEM, themeMode) { viewModel.setThemeMode(it) }
 
             Spacer(Modifier.height(24.dp))
             Divider()
             Spacer(Modifier.height(16.dp))
-            Text("CleanSpace v1.0", style = MaterialTheme.typography.bodyMedium)
-            Text("তৈরি করেছে শোহান", style = MaterialTheme.typography.bodyMedium)
+            Text("Reclaim v1.3.0", style = MaterialTheme.typography.bodyMedium)
+            Text("Storage cleaner for Android", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

@@ -4,15 +4,25 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- upward arrow: reclaim space -->
     <path
-        android:fillColor="#FFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="
-            M54,54 m-24,0
-            a24,24 0 1,0 48,0
-            a24,24 0 1,0 -48,0
-            M54,54 m-11,0
-            a11,11 0 1,0 22,0
-            a11,11 0 1,0 -22,0
-        " />
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M54,72 L54,36" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M38,52 L54,36 L70,52" />
+    <!-- horizontal bar at bottom -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:pathData="M36,76 L72,76" />
 </vector>

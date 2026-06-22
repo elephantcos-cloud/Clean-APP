@@ -73,7 +73,7 @@ fun DuplicatesScreen(viewModel: MainViewModel, navController: NavController) {
             if (groups.isNotEmpty()) {
                 BottomAppBar {
                     Text(
-                        "নষ্ট হচ্ছে: ${MainViewModel.formatBytes(totalWasted)}",
+                        "Wasted: ${MainViewModel.formatBytes(totalWasted)}",
                         modifier = Modifier.padding(start = 16.dp).weight(1f)
                     )
                     Button(
@@ -82,7 +82,7 @@ fun DuplicatesScreen(viewModel: MainViewModel, navController: NavController) {
                     ) {
                         Icon(Icons.Filled.Delete, contentDescription = null)
                         Spacer(Modifier.width(4.dp))
-                        Text("Delete copies")
+                        Text("Delete Copies")
                     }
                 }
             }
@@ -98,7 +98,7 @@ fun DuplicatesScreen(viewModel: MainViewModel, navController: NavController) {
                     ) {
                         CircularProgressIndicator()
                         Spacer(Modifier.height(12.dp))
-                        Text("ফাইল মিলিয়ে দেখা হচ্ছে...")
+                        Text("Comparing files...")
                     }
                 }
                 groups.isEmpty() -> {
@@ -107,7 +107,11 @@ fun DuplicatesScreen(viewModel: MainViewModel, navController: NavController) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text("কোনো নকল ফাইল পাওয়া যায়নি")
+                        com.shohan.cleanspace.ui.components.EmptyState(
+                            icon = Icons.Filled.CheckCircle,
+                            title = "No Duplicates Found",
+                            subtitle = "Your storage has no duplicate files"
+                        )
                     }
                 }
                 else -> {
@@ -120,7 +124,7 @@ fun DuplicatesScreen(viewModel: MainViewModel, navController: NavController) {
                             Card(modifier = Modifier.fillMaxWidth()) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Text(
-                                        "${group.files.size}টা একই ফাইল  •  ${MainViewModel.formatBytes(group.sizeBytes)} প্রতিটা",
+                                        "${group.files.size} identical  •  ${MainViewModel.formatBytes(group.sizeBytes)} each",
                                         style = MaterialTheme.typography.titleMedium
                                     )
                                     Spacer(Modifier.height(8.dp))
@@ -175,7 +179,7 @@ private fun DuplicateFileRow(file: DuplicateFile, onToggle: () -> Unit) {
         Column(modifier = Modifier.weight(1f)) {
             Text(file.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
             Text(
-                if (file.keepThisOne) "রাখা হবে" else "মুছে ফেলা হবে",
+                if (file.keepThisOne) "Keep" else "Delete",
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (file.keepThisOne) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.error

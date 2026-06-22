@@ -45,10 +45,10 @@ fun PermissionScreen(permissions: AppPermissions, onRefresh: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(32.dp))
-        Text("CleanSpace", style = MaterialTheme.typography.headlineMedium)
+        Text("Reclaim", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
         Text(
-            "শুরু করতে নিচের দুটো permission দিতে হবে",
+            "Grant the following permissions to continue",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
         )
@@ -57,7 +57,7 @@ fun PermissionScreen(permissions: AppPermissions, onRefresh: () -> Unit) {
         PermissionCard(
             icon = Icons.Filled.Folder,
             title = "All Files Access",
-            description = "Junk ও Large file স্ক্যান করার জন্য প্রয়োজন",
+            description = "Required to scan for junk and large files",
             granted = permissions.allFilesAccess,
             onClick = { context.startActivity(PermissionHelper.allFilesAccessIntent(context)) }
         )
@@ -65,19 +65,19 @@ fun PermissionScreen(permissions: AppPermissions, onRefresh: () -> Unit) {
         PermissionCard(
             icon = Icons.Filled.Insights,
             title = "Usage Access",
-            description = "App-wise storage তথ্য দেখার জন্য প্রয়োজন",
+            description = "Required to show per-app storage usage",
             granted = permissions.usageAccess,
             onClick = { context.startActivity(PermissionHelper.usageAccessIntent()) }
         )
 
         Spacer(Modifier.height(32.dp))
         Button(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
-            Text("Permission চেক করো")
+            Text("Check Permissions")
         }
 
         Spacer(Modifier.height(24.dp))
         Text(
-            "টিপস: System Settings পেজে CleanSpace-এর জন্য permission \"Allow\" করে ফিরে এসে \"চেক করো\" বাটনে ট্যাপ করো।",
+            "Tip: Allow the permissions in System Settings, then come back and tap \"Check Permissions\".",
             style = MaterialTheme.typography.bodyMedium
         )
     }

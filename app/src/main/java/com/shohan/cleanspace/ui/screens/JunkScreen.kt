@@ -67,7 +67,7 @@ fun JunkScreen(viewModel: MainViewModel, navController: NavController) {
             if (junkFiles.isNotEmpty()) {
                 BottomAppBar {
                     Text(
-                        "নির্বাচিত: ${MainViewModel.formatBytes(totalSelected)}",
+                        "Selected: ${MainViewModel.formatBytes(totalSelected)}",
                         modifier = Modifier.padding(start = 16.dp).weight(1f)
                     )
                     Button(
@@ -92,7 +92,7 @@ fun JunkScreen(viewModel: MainViewModel, navController: NavController) {
                     ) {
                         CircularProgressIndicator()
                         Spacer(Modifier.height(12.dp))
-                        Text("স্ক্যান করা হচ্ছে...")
+                        Text("Scanning...")
                     }
                 }
                 junkFiles.isEmpty() -> {
@@ -101,14 +101,16 @@ fun JunkScreen(viewModel: MainViewModel, navController: NavController) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(Icons.Filled.FolderOff, contentDescription = null, modifier = Modifier.size(64.dp))
-                        Spacer(Modifier.height(12.dp))
-                        Text("কোনো Junk ফাইল পাওয়া যায়নি")
-                        Spacer(Modifier.height(16.dp))
+                        com.shohan.cleanspace.ui.components.EmptyState(
+                            icon = Icons.Filled.FolderOff,
+                            title = "All Clean!",
+                            subtitle = "No junk files were found"
+                        )
+                        Spacer(Modifier.height(8.dp))
                         OutlinedButton(onClick = { viewModel.scanJunk() }) {
                             Icon(Icons.Filled.Search, contentDescription = null)
                             Spacer(Modifier.width(4.dp))
-                            Text("আবার স্ক্যান করো")
+                            Text("Scan Again")
                         }
                     }
                 }

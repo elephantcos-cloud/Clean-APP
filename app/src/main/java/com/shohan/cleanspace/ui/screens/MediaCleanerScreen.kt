@@ -67,7 +67,7 @@ fun MediaCleanerScreen(viewModel: MainViewModel, navController: NavController) {
                     ) {
                         CircularProgressIndicator()
                         Spacer(Modifier.height(12.dp))
-                        Text("স্ক্যান করা হচ্ছে...")
+                        Text("Scanning...")
                     }
                 }
                 mediaApps.isEmpty() -> {
@@ -76,11 +76,10 @@ fun MediaCleanerScreen(viewModel: MainViewModel, navController: NavController) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(Icons.Filled.ChatBubble, contentDescription = null)
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            "WhatsApp/Telegram/Messenger পাওয়া যায়নি, অথবা এদের কোনো মিডিয়া নেই",
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        com.shohan.cleanspace.ui.components.EmptyState(
+                            icon = Icons.Filled.ChatBubble,
+                            title = "Nothing Found",
+                            subtitle = "No media found for WhatsApp, Telegram, or Messenger"
                         )
                     }
                 }
@@ -115,7 +114,7 @@ private fun MediaAppCard(app: MediaAppInfo, onDeleteCategory: (String) -> Unit) 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(app.displayName, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "মোট: ${MainViewModel.formatBytes(app.totalBytes)}",
+                        "Total: ${MainViewModel.formatBytes(app.totalBytes)}",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -129,7 +128,7 @@ private fun MediaAppCard(app: MediaAppInfo, onDeleteCategory: (String) -> Unit) 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(category.name, style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "${category.fileCount}টা ফাইল  •  ${MainViewModel.formatBytes(category.bytes)}",
+                            "${category.fileCount} files  •  ${MainViewModel.formatBytes(category.bytes)}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

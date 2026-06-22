@@ -54,7 +54,7 @@ fun LargeFilesScreen(viewModel: MainViewModel, navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("বড় ফাইল") },
+                title = { Text("Large Files") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
@@ -73,7 +73,7 @@ fun LargeFilesScreen(viewModel: MainViewModel, navController: NavController) {
                     ) {
                         CircularProgressIndicator()
                         Spacer(Modifier.height(12.dp))
-                        Text("স্ক্যান করা হচ্ছে...")
+                        Text("Scanning...")
                     }
                 }
                 largeFiles.isEmpty() -> {
@@ -82,7 +82,11 @@ fun LargeFilesScreen(viewModel: MainViewModel, navController: NavController) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text("৫০ MB-এর বড় কোনো ফাইল পাওয়া যায়নি")
+                        com.shohan.cleanspace.ui.components.EmptyState(
+                            icon = Icons.Filled.InsertDriveFile,
+                            title = "No Large Files",
+                            subtitle = "No files larger than 50 MB were found"
+                        )
                     }
                 }
                 else -> {
@@ -119,16 +123,16 @@ fun LargeFilesScreen(viewModel: MainViewModel, navController: NavController) {
     fileToDelete?.let { file ->
         AlertDialog(
             onDismissRequest = { fileToDelete = null },
-            title = { Text("ফাইল মুছবে?") },
-            text = { Text("${file.name} (${MainViewModel.formatBytes(file.sizeBytes)}) স্থায়ীভাবে মুছে যাবে।") },
+            title = { Text("Delete File?") },
+            text = { Text("${file.name} (${MainViewModel.formatBytes(file.sizeBytes)}) will be permanently deleted.") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteLargeFile(file)
                     fileToDelete = null
-                }) { Text("মুছে ফেলো") }
+                }) { Text("Delete") }
             },
             dismissButton = {
-                TextButton(onClick = { fileToDelete = null }) { Text("বাতিল") }
+                TextButton(onClick = { fileToDelete = null }) { Text("Cancel") }
             }
         )
     }

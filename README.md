@@ -14,6 +14,15 @@ Android Storage & Cache Cleaner — Jetpack Compose + MVVM + Shizuku
 8. **সব App-এর Cache এক ক্লিকে Clean** — Shizuku দিয়ে
 9. **Theme** — Light / Dark / System
 
+### Visual Redesign (v1.2.0)
+- নতুন App icon — Indigo background + minimal checkmark
+- Premium color palette (Indigo primary, refined neutrals), light ও dark দুই থিমেই
+- Generous rounded corners সব জায়গায় (Shapes.kt, theme-wide — কোনো screen আলাদা করে বদলাতে হয়নি)
+- Typography refine — বড়, bold headline, হালকা body text
+- Donut chart-এ smooth draw-in animation
+- সব ToolCard-এ icon badge + subtle border style (heavy shadow সরিয়ে flat-premium লুক)
+- প্রতিটা "খালি" স্ক্রিনে (Junk/Large Files/Duplicates/Orphaned/Media) animated EmptyState — pulsing icon badge + সুন্দর message
+
 ### Batch 1 আপডেট নোট
 - Navigation নতুন করে সাজানো হয়েছে: আগে bottom-tab ছিল, এখন Home স্ক্রিন থেকে card ট্যাপ করে প্রতিটা টুলে যাওয়া যায় (টুল বেশি হয়ে যাওয়ায় bottom-tab আর কাজে দিচ্ছিল না)
 - Duplicate Finder-এ ছবির thumbnail দেখানোর জন্য Coil লাইব্রেরি যোগ হয়েছে

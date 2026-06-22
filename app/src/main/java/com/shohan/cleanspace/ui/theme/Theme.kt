@@ -8,19 +8,35 @@ import androidx.compose.runtime.Composable
 import com.shohan.cleanspace.data.models.ThemeMode
 
 private val LightColors = lightColorScheme(
-    primary = BluePrimary,
-    secondary = TealAccent,
+    primary = Emerald600,
+    onPrimary = LightSurface,
+    primaryContainer = Emerald50,
+    onPrimaryContainer = Emerald700,
+    secondary = Sky,
     background = LightBackground,
+    onBackground = LightOnSurface,
     surface = LightSurface,
-    error = RedAccent
+    onSurface = LightOnSurface,
+    surfaceVariant = LightSurfaceVar,
+    onSurfaceVariant = LightOnSurfaceMuted,
+    outline = LightOutline,
+    error = Rose
 )
 
 private val DarkColors = darkColorScheme(
-    primary = BlueLight,
-    secondary = TealAccent,
+    primary = Emerald400,
+    onPrimary = DarkBackground,
+    primaryContainer = Emerald700,
+    onPrimaryContainer = Emerald100,
+    secondary = Sky,
     background = DarkBackground,
+    onBackground = DarkOnSurface,
     surface = DarkSurface,
-    error = RedAccent
+    onSurface = DarkOnSurface,
+    surfaceVariant = DarkSurfaceVar,
+    onSurfaceVariant = DarkOnSurfaceMuted,
+    outline = DarkOutline,
+    error = Rose
 )
 
 @Composable
@@ -28,12 +44,13 @@ fun CleanSpaceTheme(themeMode: ThemeMode, content: @Composable () -> Unit) {
     val darkTheme = when (themeMode) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.SYSTEM -> false  // Default light; only Dark when user explicitly chooses
     }
     val colors = if (darkTheme) DarkColors else LightColors
     MaterialTheme(
         colorScheme = colors,
         typography = CleanSpaceTypography,
+        shapes = CleanSpaceShapes,
         content = content
     )
 }

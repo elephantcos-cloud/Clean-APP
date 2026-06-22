@@ -69,7 +69,7 @@ fun OrphanedDataScreen(viewModel: MainViewModel, navController: NavController) {
             if (orphanedList.isNotEmpty()) {
                 BottomAppBar {
                     Text(
-                        "নির্বাচিত: ${MainViewModel.formatBytes(totalSelected)}",
+                        "Selected: ${MainViewModel.formatBytes(totalSelected)}",
                         modifier = Modifier.padding(start = 16.dp).weight(1f)
                     )
                     Button(
@@ -94,13 +94,13 @@ fun OrphanedDataScreen(viewModel: MainViewModel, navController: NavController) {
                     ) {
                         Icon(Icons.Filled.FolderOff, contentDescription = null, modifier = Modifier.padding(bottom = 12.dp))
                         Text(
-                            "এই ফিচারের জন্য Shizuku চালু থাকা দরকার",
+                            "Shizuku is required for one-tap cache clearing",
                             style = MaterialTheme.typography.titleMedium,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Android 11+ এ uninstall করা App-এর leftover ফোল্ডার দেখতে hলে shell-level access লাগে — এটা শুধু Shizuku দিয়েই সম্ভব। README.md দেখো setup করার উপায়।",
+                            "Android 11+ blocks cross-app folder access. Shizuku grants shell-level access to scan these leftover folders. See README for setup.",
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
@@ -114,7 +114,7 @@ fun OrphanedDataScreen(viewModel: MainViewModel, navController: NavController) {
                     ) {
                         CircularProgressIndicator()
                         Spacer(Modifier.height(12.dp))
-                        Text("স্ক্যান করা হচ্ছে...")
+                        Text("Scanning...")
                     }
                 }
                 orphanedList.isEmpty() -> {
@@ -123,7 +123,11 @@ fun OrphanedDataScreen(viewModel: MainViewModel, navController: NavController) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text("কোনো Orphaned Data পাওয়া যায়নি — সব পরিষ্কার আছে!")
+                        com.shohan.cleanspace.ui.components.EmptyState(
+                            icon = Icons.Filled.FolderOff,
+                            title = "All Clear!",
+                            subtitle = "No orphaned data found"
+                        )
                     }
                 }
                 else -> {
