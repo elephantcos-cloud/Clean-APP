@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,7 +57,7 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
             ThemeOption("Follow System", ThemeMode.SYSTEM, themeMode) { viewModel.setThemeMode(it) }
 
             Spacer(Modifier.height(24.dp))
-            HorizontalDivider()
+            Divider()
             Spacer(Modifier.height(16.dp))
             Text("CleanSpace v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
             Text("Storage cleaner for Android", style = MaterialTheme.typography.bodyMedium)
