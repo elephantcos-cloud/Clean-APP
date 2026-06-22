@@ -21,7 +21,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -32,11 +33,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,11 +57,30 @@ import java.io.File
 @Composable
 fun DuplicatesScreen(viewModel: MainViewModel, navController: NavController) {
     val groups by viewModel.duplicateGroups.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val isLoading by viewModel.duplicatesLoading.collectAsState()
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.scanDuplicates() }
 
     val totalWasted = groups.sumOf { it.wastedBytes }
+    val deleteCount = groups.sumOf { group -> group.files.count { !it.keepThisOne } }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete $deleteCount duplicate copies?") },
+            text = { Text("This will permanently delete every file marked \"Delete\" below (${MainViewModel.formatBytes(totalWasted)} freed). This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    viewModel.deleteUnselectedDuplicates()
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -77,7 +101,7 @@ fun DuplicatesScreen(viewModel: MainViewModel, navController: NavController) {
                         modifier = Modifier.padding(start = 16.dp).weight(1f)
                     )
                     Button(
-                        onClick = { viewModel.deleteUnselectedDuplicates() },
+                        onClick = { showDeleteConfirm = true },
                         modifier = Modifier.padding(end = 16.dp)
                     ) {
                         Icon(Icons.Filled.Delete, contentDescription = null)
@@ -90,7 +114,7 @@ fun DuplicatesScreen(viewModel: MainViewModel, navController: NavController) {
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
-                isLoading -> {
+                isLoading && groups.isEmpty() -> {
                     Column(
                         modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -187,7 +211,7 @@ private fun DuplicateFileRow(file: DuplicateFile, onToggle: () -> Unit) {
         }
         IconButton(onClick = onToggle) {
             Icon(
-                if (file.keepThisOne) Icons.Filled.CheckCircle else Icons.Filled.ThumbUp,
+                if (file.keepThisOne) Icons.Filled.CheckCircle else Icons.Filled.DeleteOutline,
                 contentDescription = "Toggle keep",
                 tint = if (file.keepThisOne) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.outline

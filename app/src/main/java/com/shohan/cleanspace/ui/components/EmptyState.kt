@@ -1,11 +1,12 @@
 package com.shohan.cleanspace.ui.components
 
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,14 +33,16 @@ fun EmptyState(
     subtitle: String,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition()
-    val pulse by infiniteTransition.animateFloatAsState(
+    // Fix 1: animateFloat (not animateFloatAsState) — InfiniteTransition API
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulse by infiniteTransition.animateFloat(
         initialValue = 0.95f,
         targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
             animation = tween(1400),
             repeatMode = RepeatMode.Reverse
-        )
+        ),
+        label = "pulse_scale"
     )
 
     Column(
@@ -48,7 +51,7 @@ fun EmptyState(
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        androidx.compose.foundation.layout.Box(
+        Box(
             modifier = Modifier
                 .size(88.dp)
                 .scale(pulse)

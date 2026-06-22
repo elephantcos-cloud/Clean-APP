@@ -25,6 +25,9 @@ jobs:
 
       - name: Build Debug APK
         run: gradle assembleDebug --stacktrace
+        # Uses the Gradle install from setup-gradle above, not ./gradlew —
+        # gradle/wrapper/gradle-wrapper.jar isn't checked into this export.
+        # See README.md "Local Gradle wrapper note" if you need ./gradlew locally.
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

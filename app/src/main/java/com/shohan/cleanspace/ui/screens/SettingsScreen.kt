@@ -1,5 +1,6 @@
 package com.shohan.cleanspace.ui.screens
 
+import com.shohan.cleanspace.BuildConfig
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,9 +57,9 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
             ThemeOption("Follow System", ThemeMode.SYSTEM, themeMode) { viewModel.setThemeMode(it) }
 
             Spacer(Modifier.height(24.dp))
-            Divider()
+            HorizontalDivider()
             Spacer(Modifier.height(16.dp))
-            Text("Reclaim v1.3.0", style = MaterialTheme.typography.bodyMedium)
+            Text("CleanSpace v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
             Text("Storage cleaner for Android", style = MaterialTheme.typography.bodyMedium)
         }
     }

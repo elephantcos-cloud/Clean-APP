@@ -44,7 +44,7 @@ import com.shohan.cleanspace.viewmodel.MainViewModel
 @Composable
 fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
     val apps by viewModel.installedApps.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val isLoading by viewModel.appsLoading.collectAsState()
     val permissions by viewModel.permissions.collectAsState()
     val bulkProgress by viewModel.bulkClearProgress.collectAsState()
     val context = LocalContext.current
@@ -116,7 +116,7 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             }
 
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f)) {
                 if (isLoading && apps.isEmpty()) {
                     Column(
                         modifier = Modifier.fillMaxSize(),

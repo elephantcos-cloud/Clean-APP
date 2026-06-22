@@ -33,19 +33,24 @@ import com.shohan.cleanspace.data.PermissionHelper
 import com.shohan.cleanspace.data.models.AppPermissions
 import com.shohan.cleanspace.ui.theme.GreenAccent
 
+// Fix 5 (part): modifier parameter added so CleanSpaceRoot can pass padding
 @Composable
-fun PermissionScreen(permissions: AppPermissions, onRefresh: () -> Unit) {
+fun PermissionScreen(
+    permissions: AppPermissions,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(32.dp))
-        Text("Reclaim", style = MaterialTheme.typography.headlineMedium)
+        Text("CleanSpace", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
         Text(
             "Grant the following permissions to continue",

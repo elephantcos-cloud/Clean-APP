@@ -15,9 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,6 +27,7 @@ import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,7 +36,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -69,7 +66,8 @@ import com.shohan.cleanspace.viewmodel.MainViewModel
 fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     val overview        by viewModel.storageOverview.collectAsState()
     val breakdown       by viewModel.categoryBreakdown.collectAsState()
-    val isLoading       by viewModel.isLoading.collectAsState()
+    val isLoading       by viewModel.dashboardLoading.collectAsState()
+    val isAnyLoading    by viewModel.isAnyLoading.collectAsState()
     val lowStorage      by viewModel.lowStorageWarning.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.loadDashboard() }
@@ -77,9 +75,9 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Reclaim") },
+                title = { Text("CleanSpace") },
                 actions = {
-                    if (isLoading) {
+                    if (isAnyLoading) {
                         IconButton(onClick = { viewModel.cancelCurrentScan() }) {
                             Icon(Icons.Filled.Close, contentDescription = "Cancel")
                         }
@@ -152,9 +150,7 @@ fun DashboardScreen(viewModel: MainViewModel, navController: NavController) {
 
                             DonutChart(
                                 slices = slices,
-                                modifier = Modifier
-                                    .fillMaxWidth(0.72f)
-                                    .align(Alignment.CenterHorizontally),
+                                modifier = Modifier.fillMaxWidth(0.72f),
                                 centerLabel = "$usedPct%",
                                 centerSubLabel = "Used"
                             )
@@ -244,7 +240,7 @@ private data class ToolItem(
 
 private val toolItems = listOf(
     ToolItem("junk",          "Junk Cleaner",    "Temp & cache files",    Icons.Filled.DeleteSweep, Rose),
-    ToolItem("large_files",   "Large Files",     "Find space hogs",       Icons.Filled.FolderOpen,  Orange),
+    ToolItem("large_files",   "Large Files",     "Find space hogs",       Icons.Filled.Storage,     Orange),
     ToolItem("duplicates",    "Duplicates",      "Remove copies",         Icons.Filled.ContentCopy, Violet),
     ToolItem("orphaned",      "Orphaned Data",   "App leftovers",         Icons.Filled.FolderOff,   Sky),
     ToolItem("media_cleaner", "Media Cleaner",   "WhatsApp / Telegram",   Icons.Filled.ChatBubble,  Amber),

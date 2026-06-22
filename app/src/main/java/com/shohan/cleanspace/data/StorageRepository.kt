@@ -1,10 +1,8 @@
 package com.shohan.cleanspace.data
 
 import android.app.usage.StorageStatsManager
-import android.content.ContentUris
 import android.content.Context
 import android.content.pm.ApplicationInfo
-import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
@@ -31,21 +29,20 @@ class StorageRepository(private val context: Context) {
 
     // ── Storage Overview ──────────────────────────────────────────────────────
 
-    fun getStorageOverview(): StorageOverview {
+    suspend fun getStorageOverview(): StorageOverview = withContext(Dispatchers.IO) {
         val stat = StatFs(Environment.getExternalStorageDirectory().path)
         val total = stat.totalBytes
         val free = stat.availableBytes
-        return StorageOverview(totalBytes = total, usedBytes = total - free, freeBytes = free)
+        StorageOverview(totalBytes = total, usedBytes = total - free, freeBytes = free)
     }
 
-    // ── Category Breakdown (MediaStore — fast, no walkTopDown, no double-count) ──
+    // ── Category Breakdown ────────────────────────────────────────────────────
 
     suspend fun getCategoryBreakdown(): List<CategorySize> = withContext(Dispatchers.IO) {
         var images = 0L
         var videos = 0L
         var audio  = 0L
 
-        // Images
         context.contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             arrayOf(MediaStore.Images.Media.SIZE), null, null, null
@@ -54,7 +51,6 @@ class StorageRepository(private val context: Context) {
             while (c.moveToNext()) images += c.getLong(sizeIdx).coerceAtLeast(0)
         }
 
-        // Videos
         context.contentResolver.query(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             arrayOf(MediaStore.Video.Media.SIZE), null, null, null
@@ -63,7 +59,6 @@ class StorageRepository(private val context: Context) {
             while (c.moveToNext()) videos += c.getLong(sizeIdx).coerceAtLeast(0)
         }
 
-        // Audio
         context.contentResolver.query(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
             arrayOf(MediaStore.Audio.Media.SIZE), null, null, null
@@ -74,7 +69,6 @@ class StorageRepository(private val context: Context) {
 
         val appsBytes = getTotalAppsSize()
         val total = getStorageOverview().usedBytes
-        // Documents & Others = what's left (avoids double-counting)
         val others = (total - appsBytes - images - videos - audio).coerceAtLeast(0)
 
         listOf(
@@ -102,7 +96,7 @@ class StorageRepository(private val context: Context) {
         } catch (_: Exception) { 0L }
     }
 
-    // ── Junk File Scanner (File walk, scoped to external only) ────────────────
+    // ── Junk File Scanner ─────────────────────────────────────────────────────
 
     private val junkExtensions = setOf("tmp", "log", "bak", "old", "temp")
 
@@ -110,8 +104,9 @@ class StorageRepository(private val context: Context) {
         withTimeout(60_000L) {
             val results = mutableListOf<JunkFile>()
             val root = Environment.getExternalStorageDirectory()
-            val visited = HashSet<String>()  // symlink loop protection
+            val visited = HashSet<String>()
 
+            // Fix 6: Scan general storage (excluding Android/ folder handled separately)
             if (root.exists() && root.canRead()) {
                 root.walkTopDown()
                     .onEnter { dir ->
@@ -145,13 +140,35 @@ class StorageRepository(private val context: Context) {
                     }
             }
 
+            // Fix 6: Also scan Android/data/*/cache — these are the biggest junk sources
+            // (requires MANAGE_EXTERNAL_STORAGE which this app already has)
+            val androidData = File(root, "Android/data")
+            if (androidData.exists() && androidData.canRead()) {
+                androidData.listFiles()?.forEach { pkgDir ->
+                    val cacheDir = File(pkgDir, "cache")
+                    if (cacheDir.exists() && cacheDir.canRead()) {
+                        val sz = try {
+                            cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                        } catch (_: Exception) { 0L }
+                        if (sz > 0) {
+                            results.add(JunkFile(
+                                path = cacheDir.absolutePath,
+                                name = "${pkgDir.name} cache",
+                                sizeBytes = sz,
+                                reason = "App cache (Android/data)"
+                            ))
+                        }
+                    }
+                }
+            }
+
             // Own app cache
             val ownCache = context.cacheDir
             if (ownCache.exists()) {
                 val size = ownCache.walkTopDown().filter { it.isFile }.sumOf { it.length() }
                 if (size > 0) results.add(0, JunkFile(
                     path = ownCache.absolutePath,
-                    name = "Reclaim App Cache",
+                    name = "CleanSpace App Cache",
                     sizeBytes = size,
                     reason = "This app's own cache"
                 ))
@@ -166,7 +183,7 @@ class StorageRepository(private val context: Context) {
 
     fun clearOwnAppCache(): Boolean = try { context.cacheDir.deleteRecursively() } catch (_: Exception) { false }
 
-    // ── Large File Finder (MediaStore — fast) ──────────────────────────────────
+    // ── Large File Finder ──────────────────────────────────────────────────────
 
     suspend fun scanLargeFiles(thresholdBytes: Long = 50L * 1024 * 1024): List<LargeFile> =
         withContext(Dispatchers.IO) {
@@ -201,6 +218,35 @@ class StorageRepository(private val context: Context) {
                         }
                     }
                 }
+                // Bug #6 fix: also scan Files (docs, APKs, ZIPs, etc.)
+                val filesUri = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q)
+                    MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                else
+                    MediaStore.Files.getContentUri("external")
+
+                val existingPaths = results.map { it.path }.toSet()
+                context.contentResolver.query(
+                    filesUri,
+                    arrayOf(MediaStore.Files.FileColumns.DATA, MediaStore.Files.FileColumns.SIZE),
+                    "${MediaStore.Files.FileColumns.SIZE} >= ?",
+                    arrayOf(thresholdBytes.toString()),
+                    "${MediaStore.Files.FileColumns.SIZE} DESC"
+                )?.use { c ->
+                    val dataIdx = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
+                    val sizeIdx = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
+                    while (c.moveToNext()) {
+                        val path = c.getString(dataIdx) ?: continue
+                        if (path in existingPaths) continue  // skip already-added media files
+                        val size = c.getLong(sizeIdx)
+                        results.add(LargeFile(
+                            path = path,
+                            name = File(path).name,
+                            sizeBytes = size,
+                            extension = File(path).extension
+                        ))
+                    }
+                }
+
                 results.sortedByDescending { it.sizeBytes }.take(200)
             }
         }
@@ -208,7 +254,7 @@ class StorageRepository(private val context: Context) {
     fun deleteFile(path: String): Boolean = try { File(path).delete() } catch (_: Exception) { false }
     fun deleteLargeFile(file: LargeFile): Boolean = deleteFile(file.path)
 
-    // ── Duplicate File Finder (size → hash, capped at 300 groups) ─────────────
+    // ── Duplicate File Finder ──────────────────────────────────────────────────
 
     private val dupExtensions = setOf(
         "jpg","jpeg","png","gif","webp","bmp","heic",
@@ -256,9 +302,13 @@ class StorageRepository(private val context: Context) {
                         sizeBytes = size
                     ))
                 }
-                if (results.size >= 300) break  // cap to prevent OOM
             }
-            results.sortedByDescending { it.wastedBytes }
+            // Fix: sort by wasted bytes FIRST, then cap — `bySize` is a HashMap so
+            // iteration order is arbitrary. Capping mid-loop (before sorting) could
+            // silently drop the biggest, most-wasteful duplicate sets while keeping
+            // trivial ones, depending on hash order. Sorting before truncating
+            // guarantees the top 300 by wasted space are always the ones returned.
+            results.sortedByDescending { it.wastedBytes }.take(300)
         }
     }
 
@@ -272,14 +322,14 @@ class StorageRepository(private val context: Context) {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    // ── Media App Cleaner (WhatsApp / Telegram / Messenger) ───────────────────
+    // ── Media App Cleaner ──────────────────────────────────────────────────────
 
     private val knownMediaApps = listOf(
-        "com.whatsapp"       to "WhatsApp",
-        "com.whatsapp.w4b"   to "WhatsApp Business",
+        "com.whatsapp"           to "WhatsApp",
+        "com.whatsapp.w4b"       to "WhatsApp Business",
         "org.telegram.messenger" to "Telegram",
-        "com.facebook.orca"  to "Messenger",
-        "com.facebook.katana" to "Facebook"
+        "com.facebook.orca"      to "Messenger",
+        "com.facebook.katana"    to "Facebook"
     )
 
     private val imageExt = setOf("jpg","jpeg","png","gif","webp","bmp","heic")
@@ -341,33 +391,41 @@ class StorageRepository(private val context: Context) {
                 val ext = file.extension.lowercase()
                 val isStatus = file.absolutePath.contains("/Statuses/") || file.absolutePath.contains("/.Statuses/")
                 val matches = when (categoryName) {
-                    "Status"       -> isStatus
-                    "Images"       -> !isStatus && ext in imageExt
-                    "Videos"       -> !isStatus && ext in videoExt
-                    "Audio / Voice"-> !isStatus && ext in audioExt
-                    "Documents"    -> !isStatus && ext in docExt
-                    else           -> !isStatus && ext !in imageExt && ext !in videoExt && ext !in audioExt && ext !in docExt
+                    "Status"        -> isStatus
+                    "Images"        -> !isStatus && ext in imageExt
+                    "Videos"        -> !isStatus && ext in videoExt
+                    "Audio / Voice" -> !isStatus && ext in audioExt
+                    "Documents"     -> !isStatus && ext in docExt
+                    else            -> !isStatus && ext !in imageExt && ext !in videoExt && ext !in audioExt && ext !in docExt
                 }
                 if (matches) { val sz = file.length(); if (file.delete()) freed += sz }
             }
             freed
         }
 
-    // ── Orphaned Data Finder (Shizuku required) ────────────────────────────────
+    // ── Orphaned Data Finder ───────────────────────────────────────────────────
+
+    // Fix: single-quote shell escaping. Wrapping a value in single quotes and
+    // escaping any embedded single quote as '\'' is the only quoting style that
+    // fully neutralizes shell metacharacters ($(...), `...`, ;, &&, etc).
+    // Double quotes (the previous approach) still allow $(...) / backtick
+    // command substitution to execute, so they do NOT prevent shell injection.
+    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
     suspend fun scanOrphanedData(service: ICacheService): List<OrphanedItem> =
         withContext(Dispatchers.IO) {
             val installed = context.packageManager.getInstalledApplications(0).map { it.packageName }.toSet()
             val results = mutableListOf<OrphanedItem>()
             for (location in listOf("Android/data", "Android/obb")) {
-                val list = try { service.runCommand("ls /storage/emulated/0/$location") } catch (_: Exception) { "" }
+                val list = try { service.runCommand("ls ${shellQuote("/storage/emulated/0/$location")}") } catch (_: Exception) { "" }
                 list.lines().map { it.trim() }.filter { it.isNotEmpty() }.forEach { folder ->
                     if (folder !in installed && folder.contains(".")) {
+                        val safePath = "/storage/emulated/0/$location/$folder"
                         val sz = try {
-                            service.runCommand("du -sb /storage/emulated/0/$location/$folder")
+                            service.runCommand("du -sb ${shellQuote(safePath)}")
                                 .trim().split(Regex("\\s+")).firstOrNull()?.toLongOrNull() ?: 0L
                         } catch (_: Exception) { 0L }
-                        results.add(OrphanedItem("/storage/emulated/0/$location/$folder", folder, sz, location))
+                        results.add(OrphanedItem(safePath, folder, sz, location))
                     }
                 }
             }
@@ -376,7 +434,9 @@ class StorageRepository(private val context: Context) {
 
     suspend fun deleteOrphanedItem(service: ICacheService, path: String): Boolean =
         withContext(Dispatchers.IO) {
-            try { service.runCommand("rm -rf '$path' && echo OK").contains("OK") }
+            try {
+                service.runCommand("rm -rf ${shellQuote(path)} && echo OK").contains("OK")
+            }
             catch (_: Exception) { false }
         }
 

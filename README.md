@@ -1,90 +1,88 @@
-# CleanSpace
+# CleanSpace — Android Storage Cleaner
 
-Android Storage & Cache Cleaner — Jetpack Compose + MVVM + Shizuku
+A fast, privacy-respecting Android storage cleaner built with Jetpack Compose, MVVM, and Shizuku.
 
-## ফিচার লিস্ট
+## Features
 
-1. **Dashboard (Home Hub)** — মোট/ব্যবহৃত/খালি storage, ক্যাটাগরি অনুযায়ী Donut Chart, এবং সব টুলের grid
-2. **Junk Scanner** — .tmp/.log/.bak/.old/.temp/.cache ফাইল ও খালি ফোল্ডার
-3. **Large File Finder** — ৫০ MB+ ফাইল sort করে দেখায়
-4. **Duplicate Finder** — একই ফাইলের নকল কপি খুঁজে বের করে (size+hash matching), ছবি হলে thumbnail দেখায়
-5. **Orphaned Data Finder** — uninstall করা App-এর রেখে যাওয়া leftover folder (Shizuku লাগে)
-6. **Media Cleaner** — WhatsApp/Telegram/Messenger/Facebook-এর Images/Video/Status আলাদা করে দেখায়
-7. **App-wise Storage** — প্রতিটা App-এর storage ব্যবহার
-8. **সব App-এর Cache এক ক্লিকে Clean** — Shizuku দিয়ে
-9. **Theme** — Light / Dark / System
+| Tool | Description |
+|------|-------------|
+| **Junk Cleaner** | Temp files, empty folders |
+| **Large Files** | Files over 50 MB — images, videos, documents, APKs |
+| **Duplicate Finder** | Finds exact copies using size + MD5 hash |
+| **Orphaned Data** | Leftover folders from uninstalled apps (Shizuku required) |
+| **Media Cleaner** | WhatsApp / Telegram / Messenger / Facebook media by category |
+| **App Manager** | Per-app storage breakdown + Shizuku bulk cache clear |
 
-### Visual Redesign (v1.2.0)
-- নতুন App icon — Indigo background + minimal checkmark
-- Premium color palette (Indigo primary, refined neutrals), light ও dark দুই থিমেই
-- Generous rounded corners সব জায়গায় (Shapes.kt, theme-wide — কোনো screen আলাদা করে বদলাতে হয়নি)
-- Typography refine — বড়, bold headline, হালকা body text
-- Donut chart-এ smooth draw-in animation
-- সব ToolCard-এ icon badge + subtle border style (heavy shadow সরিয়ে flat-premium লুক)
-- প্রতিটা "খালি" স্ক্রিনে (Junk/Large Files/Duplicates/Orphaned/Media) animated EmptyState — pulsing icon badge + সুন্দর message
+## Build (GitHub Actions — no local setup needed)
 
-### Batch 1 আপডেট নোট
-- Navigation নতুন করে সাজানো হয়েছে: আগে bottom-tab ছিল, এখন Home স্ক্রিন থেকে card ট্যাপ করে প্রতিটা টুলে যাওয়া যায় (টুল বেশি হয়ে যাওয়ায় bottom-tab আর কাজে দিচ্ছিল না)
-- Duplicate Finder-এ ছবির thumbnail দেখানোর জন্য Coil লাইব্রেরি যোগ হয়েছে
-- Orphaned Data Finder **শুধু Shizuku চালু থাকলেই** কাজ করবে — কারণ Android 11+ এ All Files Access থাকলেও `Android/data` ফোল্ডারে সরাসরি ঢোকা যায় না, এটা Google-এর ইচ্ছাকৃত সীমাবদ্ধতা
-- পরের batch-এ আসবে: App Manager (batch uninstall/disable) এবং Auto-Clean Scheduler
-
-## Termux থেকে Build করার ধাপ (তোমার established workflow)
+> The folder name below (`CleanSpace2`) must match whatever the extracted ZIP
+> actually contains — `unzip -l yourfile.zip | head` will show you the real
+> top-level folder name if a future export ever uses a different one.
 
 ```bash
-cd ~/storage/downloads   # যেখানে ZIP নামিয়েছ
-unzip CleanSpace.zip
-cd CleanSpace
+# First time
+mkdir -p ~/projects
+cd ~/storage/downloads
+unzip -o CleanSpace.zip
+cp -r CleanSpace2 ~/projects/CleanSpace
+cd ~/projects/CleanSpace
 git init
 git config --global --add safe.directory $(pwd)
 git add .
-git commit -m "Initial commit: CleanSpace"
+git commit -m "Initial commit"
 git branch -M main
-git remote add origin https://github.com/<তোমার-username>/cleanspace-app.git
+git remote add origin "https://$GITHUB_USERNAME:$GITHUB_TOKEN@github.com/$GITHUB_USERNAME/cleanspace-app.git"
 git push -u origin main
 ```
 
-GitHub Actions নিজে থেকে চলবে, **Actions** ট্যাবে গিয়ে build শেষ হলে **Artifacts** থেকে `CleanSpace-debug-apk` ডাউনলোড করো।
+```bash
+# Subsequent updates (new ZIP received)
+cd ~/projects/CleanSpace
+unzip -o ~/storage/downloads/CleanSpace.zip -d /tmp/extract
+cp -r /tmp/extract/CleanSpace2/* .
+git add .
+git commit -m "Update"
+git push
+```
 
-## App চালু করার পর Permission Setup
+GitHub Actions will automatically build a debug APK. Download it from the **Actions** tab → **Artifacts** (`CleanSpace-debug-apk`).
 
-App প্রথমবার খুললে দুটো permission চাইবে (System Settings পেজে গিয়ে Allow করতে হবে):
+## Permissions
 
-1. **All Files Access** — Settings পেজ খুলে toggle অন করো
-2. **Usage Access** — Settings পেজ খুলে CleanSpace-কে Allow করো
+| Permission | Purpose |
+|-----------|---------|
+| All Files Access | Scan storage for junk and large files |
+| Usage Access | Show per-app storage breakdown |
+| Shizuku (optional) | One-tap bulk cache clear + Orphaned Data scan |
 
-দুটো দেওয়ার পর App-এ ফিরে "Permission চেক করো" বাটনে ট্যাপ করলেই মূল App চালু হয়ে যাবে।
+## Shizuku Setup (Wireless Debugging — no PC needed)
 
-## Shizuku Setup — সব App-এর Cache সত্যিকারের ভাবে Clean করার জন্য
+1. Install **Shizuku** from Play Store
+2. Enable Developer Options (tap Build Number 7 times)
+3. Enable **Wireless Debugging** in Developer Options
+4. Open Shizuku → "Pair using wireless debugging" → tap Start
+5. In CleanSpace → **App Manager** → tap "Grant Permission"
+6. After phone restart: open Shizuku and tap Start again
 
-তোমার ফোন যদি **Android 11 বা তার বেশি** হয় (Realme C25Y সাধারণত Android 11/12 নিয়ে আসে), তাহলে এই পদ্ধতি **পুরোপুরি ফোনের মধ্যেই** করা যাবে — PC বা Termux কোনোটাই লাগবে না।
+## Technical
 
-### ধাপ ১: Shizuku App ইনস্টল করো
-Play Store থেকে "Shizuku" সার্চ করে ইনস্টল করো, অথবা:
-https://shizuku.rikka.app/download/
+- Kotlin 1.9.10 · Compose BOM 2023.10.01 · Material Design 3
+- `compileSdk`/`targetSdk` 34 · `minSdk` 24 · Java 17 · AGP 8.1.4
+- Storage scanning: MediaStore API (fast, no walkTopDown for category breakdown)
+- Icon: Emerald green background + upward arrow
 
-### ধাপ ২: Developer Options চালু করো
-Settings > About Phone > "Build Number" এ পরপর ৭ বার ট্যাপ করো (Developer Options চালু হবে)
+## Local Gradle wrapper note
 
-### ধাপ ৩: Wireless Debugging অন করো
-Settings > Additional Settings (বা Developer Options) > **Wireless debugging** চালু করো
+`gradle/wrapper/gradle-wrapper.jar` is **not included** in this ZIP (binary
+jars don't survive every export/zip pipeline cleanly). The CI workflow
+(`.github/workflows/build.yml`) doesn't need it — it uses the Gradle version
+installed by `gradle/actions/setup-gradle`, not `./gradlew`. You only need the
+jar if you want to run `./gradlew` locally (e.g. inside Termux). To regenerate
+it in one step once any working Gradle install is available:
 
-### ধাপ ৪: Shizuku App থেকে Pair করো
-Shizuku App খুলে "Wireless debugging" সেকশনে যাও > "Pair device with pairing code" ট্যাপ করো — এটা system-এর pairing screen খুলবে, সেখানের কোড মিলিয়ে Pair হয়ে যাবে।
+```bash
+gradle wrapper --gradle-version 8.4
+```
 
-### ধাপ ৫: Start করো
-Pairing হয়ে গেলে Shizuku App-এর মূল স্ক্রিনে ফিরে **Start** বাটনে ট্যাপ করো। স্ট্যাটাস "Running" দেখালে কাজ শেষ।
-
-### ধাপ ৬: CleanSpace-এ Permission দাও
-CleanSpace App-এর **Apps** ট্যাবে গিয়ে "Permission দাও" বাটনে ট্যাপ করো, Shizuku-এর popup-এ Allow করো।
-
-এখন "সব App-এর Cache Clean করো" বাটন সত্যিকারের ভাবে কাজ করবে।
-
-**মনে রাখবে:** ফোন রিস্টার্ট করলে ধাপ ৫ (Shizuku App খুলে Start) আবার করতে হবে — এটাই non-root পদ্ধতির একমাত্র অসুবিধা। Root করা থাকলে এই ঝামেলা থাকতো না, কিন্তু root করা risky তাই এটা এড়িয়ে গেছি।
-
-যদি ফোনে Android 10 বা তার কম থাকে, তাহলে wireless debugging নেই — Shizuku চালু করতে একটা PC থেকে এক-বারের জন্য ADB কমান্ড চালাতে হবে (Shizuku-এর official guide দেখো)।
-
-## টেকনিক্যাল নোট
-- Kotlin 1.9.10, Compose BOM 2023.10.01, compileSdk/targetSdk 34, minSdk 24, Java 17, Gradle 8.4
-- Shizuku API ব্যবহার করা হয়েছে `dev.rikka.shizuku:api:13.1.5` — যদি Gradle এই ভার্সন খুঁজে না পায়, https://github.com/RikkaApps/Shizuku-API -এ গিয়ে latest version `app/build.gradle`-এ বসিয়ে দাও
-- Android 13+ এ `pm clear --cache-only <package>` কমান্ড ব্যবহার হয় (প্রতিটা App আলাদাভাবে), তার নিচের ভার্সনে `pm trim-caches` ব্যবহার হয় (সিস্টেম পুরোটা একসাথে trim করে)
+This recreates `gradle/wrapper/gradle-wrapper.jar` to match the version
+already pinned in `gradle/wrapper/gradle-wrapper.properties`.

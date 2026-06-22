@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -31,11 +32,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -46,11 +51,30 @@ import com.shohan.cleanspace.viewmodel.MainViewModel
 @Composable
 fun JunkScreen(viewModel: MainViewModel, navController: NavController) {
     val junkFiles by viewModel.junkFiles.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val isLoading by viewModel.junkLoading.collectAsState()
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.scanJunk() }
 
     val totalSelected = junkFiles.filter { it.selected }.sumOf { it.sizeBytes }
+    val selectedCount = junkFiles.count { it.selected }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete $selectedCount items?") },
+            text = { Text("This will permanently delete the selected junk files (${MainViewModel.formatBytes(totalSelected)}). This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    viewModel.deleteSelectedJunk()
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -71,8 +95,9 @@ fun JunkScreen(viewModel: MainViewModel, navController: NavController) {
                         modifier = Modifier.padding(start = 16.dp).weight(1f)
                     )
                     Button(
-                        onClick = { viewModel.deleteSelectedJunk() },
-                        modifier = Modifier.padding(end = 16.dp)
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier.padding(end = 16.dp),
+                        enabled = junkFiles.any { it.selected }
                     ) {
                         Icon(Icons.Filled.Delete, contentDescription = null)
                         Spacer(Modifier.width(4.dp))
@@ -84,7 +109,7 @@ fun JunkScreen(viewModel: MainViewModel, navController: NavController) {
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
-                isLoading -> {
+                isLoading && junkFiles.isEmpty() -> {
                     Column(
                         modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,

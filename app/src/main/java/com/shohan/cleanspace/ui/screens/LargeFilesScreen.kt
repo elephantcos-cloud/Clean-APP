@@ -46,7 +46,7 @@ import com.shohan.cleanspace.viewmodel.MainViewModel
 @Composable
 fun LargeFilesScreen(viewModel: MainViewModel, navController: NavController) {
     val largeFiles by viewModel.largeFiles.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val isLoading by viewModel.largeFilesLoading.collectAsState()
     var fileToDelete by remember { mutableStateOf<LargeFile?>(null) }
 
     LaunchedEffect(Unit) { viewModel.scanLargeFiles() }
@@ -65,7 +65,7 @@ fun LargeFilesScreen(viewModel: MainViewModel, navController: NavController) {
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
-                isLoading -> {
+                isLoading && largeFiles.isEmpty() -> {
                     Column(
                         modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -105,7 +105,11 @@ fun LargeFilesScreen(viewModel: MainViewModel, navController: NavController) {
                                     Spacer(Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(file.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                                        Text(file.path, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                                        Text(
+                                            text = java.io.File(file.path).parentFile?.name?.let { "…/$it" } ?: file.path,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1
+                                        )
                                     }
                                     Text(MainViewModel.formatBytes(file.sizeBytes))
                                     IconButton(onClick = { fileToDelete = file }) {

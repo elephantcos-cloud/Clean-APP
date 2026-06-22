@@ -16,6 +16,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Facebook
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +33,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -41,7 +47,7 @@ import com.shohan.cleanspace.viewmodel.MainViewModel
 @Composable
 fun MediaCleanerScreen(viewModel: MainViewModel, navController: NavController) {
     val mediaApps by viewModel.mediaApps.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val isLoading by viewModel.mediaLoading.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.scanMediaApps() }
 
@@ -59,7 +65,7 @@ fun MediaCleanerScreen(viewModel: MainViewModel, navController: NavController) {
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
-                isLoading -> {
+                isLoading && mediaApps.isEmpty() -> {
                     Column(
                         modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -72,14 +78,14 @@ fun MediaCleanerScreen(viewModel: MainViewModel, navController: NavController) {
                 }
                 mediaApps.isEmpty() -> {
                     Column(
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
                         com.shohan.cleanspace.ui.components.EmptyState(
                             icon = Icons.Filled.ChatBubble,
                             title = "Nothing Found",
-                            subtitle = "No media found for WhatsApp, Telegram, or Messenger"
+                            subtitle = "No media found for WhatsApp, Telegram, Messenger, or Facebook"
                         )
                     }
                 }
@@ -106,10 +112,39 @@ fun MediaCleanerScreen(viewModel: MainViewModel, navController: NavController) {
 
 @Composable
 private fun MediaAppCard(app: MediaAppInfo, onDeleteCategory: (String) -> Unit) {
+    val appIcon = when (app.packageName) {
+        "com.facebook.katana" -> Icons.Filled.Facebook
+        "org.telegram.messenger" -> Icons.Filled.Forum
+        else -> Icons.Filled.ChatBubble
+    }
+    var categoryPendingDelete by remember { mutableStateOf<com.shohan.cleanspace.data.models.MediaCategory?>(null) }
+
+    categoryPendingDelete?.let { category ->
+        AlertDialog(
+            onDismissRequest = { categoryPendingDelete = null },
+            title = { Text("Delete ${category.name}?") },
+            text = {
+                Text(
+                    "This will permanently delete ${category.fileCount} files " +
+                        "(${MainViewModel.formatBytes(category.bytes)}) from ${app.displayName}. This cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    categoryPendingDelete = null
+                    onDeleteCategory(category.name)
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { categoryPendingDelete = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ChatBubble, contentDescription = null)
+                Icon(appIcon, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(app.displayName, style = MaterialTheme.typography.titleMedium)
@@ -133,7 +168,7 @@ private fun MediaAppCard(app: MediaAppInfo, onDeleteCategory: (String) -> Unit) 
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    TextButton(onClick = { onDeleteCategory(category.name) }) {
+                    TextButton(onClick = { categoryPendingDelete = category }) {
                         Text("Clean")
                     }
                 }

@@ -56,11 +56,4 @@ object PermissionHelper {
     fun appSettingsIntent(context: Context, packageName: String = context.packageName): Intent {
         return Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
     }
-
-    fun legacyStoragePermissions(): Array<String> {
-        return arrayOf(
-            android.Manifest.permission.READ_EXTERNAL_STORAGE,
-            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-        )
-    }
 }

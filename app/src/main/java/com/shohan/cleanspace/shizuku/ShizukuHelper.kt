@@ -19,6 +19,12 @@ object ShizukuHelper {
         private set
 
     private var isBound = false
+    // Fix: tracks a bind that has been *requested* but not yet confirmed by
+    // onServiceConnected. Without this, two rapid bindService() calls (e.g. from
+    // a quick screen re-entry) could both pass the old `isBound` check — which
+    // only flips after the async callback fires — and trigger duplicate
+    // Shizuku.bindUserService() calls / duplicate service processes.
+    private var isBinding = false
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -26,11 +32,13 @@ object ShizukuHelper {
                 ICacheService.Stub.asInterface(binder)
             } else null
             isBound = cacheService != null
+            isBinding = false
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             cacheService = null
             isBound = false
+            isBinding = false
         }
     }
 
@@ -78,11 +86,13 @@ object ShizukuHelper {
     }
 
     fun bindService(context: Context) {
-        if (isBound) return
+        if (isBound || isBinding) return
+        isBinding = true
         try {
             Shizuku.bindUserService(serviceArgs(context), serviceConnection)
         } catch (e: Throwable) {
             cacheService = null
+            isBinding = false
         }
     }
 
@@ -94,6 +104,7 @@ object ShizukuHelper {
             // ignore
         }
         isBound = false
+        isBinding = false
         cacheService = null
     }
 }

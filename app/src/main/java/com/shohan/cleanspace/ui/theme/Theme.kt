@@ -1,10 +1,14 @@
 package com.shohan.cleanspace.ui.theme
 
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import com.shohan.cleanspace.data.models.ThemeMode
 
 private val LightColors = lightColorScheme(
@@ -41,12 +45,28 @@ private val DarkColors = darkColorScheme(
 
 @Composable
 fun CleanSpaceTheme(themeMode: ThemeMode, content: @Composable () -> Unit) {
+    // Fix 3: SYSTEM mode now correctly follows the device dark/light setting
     val darkTheme = when (themeMode) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
-        ThemeMode.SYSTEM -> false  // Default light; only Dark when user explicitly chooses
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
     val colors = if (darkTheme) DarkColors else LightColors
+
+    // Fix: status bar icon contrast. A static XML windowLightStatusBar value can
+    // only be correct for ONE theme — since this app lets the user switch
+    // light/dark/system at runtime, the icon color must be updated to match
+    // whichever theme is actually active, or it goes invisible in the other mode.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window
+            if (window != null) {
+                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            }
+        }
+    }
+
     MaterialTheme(
         colorScheme = colors,
         typography = CleanSpaceTypography,

@@ -2,7 +2,7 @@ package com.shohan.cleanspace.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ---------- Primary: Emerald green (Reclaim brand) ----------
+// ---------- Primary: Emerald green (CleanSpace brand) ----------
 val Emerald50  = Color(0xFFECFDF5)
 val Emerald100 = Color(0xFFD1FAE5)
 val Emerald400 = Color(0xFF34D399)
@@ -32,19 +32,14 @@ val DarkOnSurface   = Color(0xFFF9FAFB)
 val DarkOnSurfaceMuted = Color(0xFF9CA3AF)
 val DarkOutline     = Color(0xFF2D3A34)
 
-// ---------- Backward-compatible aliases ----------
-val BluePrimary  = Emerald600
+// ---------- Backward-compatible aliases (no misleading Indigo names) ----------
+val BluePrimary  = Emerald600  // Primary brand color
 val GreenAccent  = Emerald600
 val OrangeAccent = Amber
 val RedAccent    = Rose
 val PurpleAccent = Violet
 val TealAccent   = Sky
 val Cyan         = Sky
-val Indigo600    = Emerald600
-val Indigo50     = Emerald50
-val Indigo100    = Emerald100
-val Indigo400    = Emerald400
-val Indigo700    = Emerald700
 
 val CategoryColors = listOf(
     Emerald600, Sky, Amber, Violet, Orange, Rose

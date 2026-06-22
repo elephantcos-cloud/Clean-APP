@@ -37,15 +37,21 @@ fun CleanSpaceRoot(viewModel: MainViewModel) {
         }
     }
 
-    if (!permissions.allFilesAccess || !permissions.usageAccess) {
-        PermissionScreen(permissions = permissions, onRefresh = { viewModel.refreshPermissions() })
-        return
-    }
-
-    val navController = rememberNavController()
+    // Fix 5: Scaffold wraps EVERYTHING — Snackbar now works on PermissionScreen too
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
+        val navController = rememberNavController()
+
+        if (!permissions.allFilesAccess || !permissions.usageAccess) {
+            PermissionScreen(
+                permissions = permissions,
+                onRefresh = { viewModel.refreshPermissions() },
+                modifier = Modifier.padding(padding)
+            )
+            return@Scaffold
+        }
+
         NavHost(
             navController = navController,
             startDestination = "home",
