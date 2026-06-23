@@ -3,25 +3,32 @@ package com.shohan.cleanspace.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.shohan.cleanspace.data.IgnoreListPreference
 import com.shohan.cleanspace.data.PermissionHelper
 import com.shohan.cleanspace.data.StorageRepository
 import com.shohan.cleanspace.data.ThemePreference
+import com.shohan.cleanspace.data.models.AppFilter
 import com.shohan.cleanspace.data.models.AppPermissions
 import com.shohan.cleanspace.data.models.AppStorageInfo
 import com.shohan.cleanspace.data.models.BulkActionProgress
 import com.shohan.cleanspace.data.models.StorageOverview
 import com.shohan.cleanspace.data.models.ThemeMode
+import com.shohan.cleanspace.shizuku.ICacheService
 import com.shohan.cleanspace.shizuku.ShizukuHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = StorageRepository(application)
     private val themePreference = ThemePreference(application)
+    private val ignoreListPreference = IgnoreListPreference(application)
 
     private var loadJob: Job? = null
     private var bulkJob: Job? = null
@@ -29,8 +36,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _storageOverview = MutableStateFlow(StorageOverview())
     val storageOverview: StateFlow<StorageOverview> = _storageOverview.asStateFlow()
 
-    private val _installedApps = MutableStateFlow<List<AppStorageInfo>>(emptyList())
-    val installedApps: StateFlow<List<AppStorageInfo>> = _installedApps.asStateFlow()
+    // Master list — holds the only mutable per-app field that matters here
+    // (`selected`). isIgnored is recomputed below via combine(), never stored
+    // here directly, so it can never go stale relative to the preference.
+    private val _rawApps = MutableStateFlow<List<AppStorageInfo>>(emptyList())
+
+    private val _ignoredPackages = MutableStateFlow<Set<String>>(emptySet())
+
+    private val _appFilter = MutableStateFlow(AppFilter.ALL)
+    val appFilter: StateFlow<AppFilter> = _appFilter.asStateFlow()
+
+    // What the UI actually renders: raw apps with isIgnored freshly applied,
+    // then narrowed by the current All/User/System filter. Recomputes
+    // automatically whenever any of the three inputs change.
+    val installedApps: StateFlow<List<AppStorageInfo>> =
+        combine(_rawApps, _ignoredPackages, _appFilter) { apps, ignored, filter ->
+            apps.map { it.copy(isIgnored = it.packageName in ignored) }
+                .filter {
+                    when (filter) {
+                        AppFilter.ALL -> true
+                        AppFilter.USER -> !it.isSystemApp
+                        AppFilter.SYSTEM -> it.isSystemApp
+                    }
+                }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _appsLoading = MutableStateFlow(false)
     val appsLoading: StateFlow<Boolean> = _appsLoading.asStateFlow()
@@ -38,9 +67,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _permissions = MutableStateFlow(AppPermissions())
     val permissions: StateFlow<AppPermissions> = _permissions.asStateFlow()
 
-    // Fix: this now carries the current app's NAME + index/total (not just a
-    // count), so the UI can show a genuine live "Clearing: WhatsApp (12/45)"
-    // screen instead of a generic spinner.
     private val _bulkActionProgress = MutableStateFlow<BulkActionProgress?>(null)
     val bulkActionProgress: StateFlow<BulkActionProgress?> = _bulkActionProgress.asStateFlow()
 
@@ -54,6 +80,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         refreshPermissions()
         viewModelScope.launch {
             themePreference.themeMode.collect { _themeMode.value = it }
+        }
+        viewModelScope.launch {
+            ignoreListPreference.ignoredPackages.collect { _ignoredPackages.value = it }
         }
     }
 
@@ -81,29 +110,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { themePreference.setThemeMode(mode) }
     }
 
+    fun setAppFilter(filter: AppFilter) { _appFilter.value = filter }
+
     fun loadHome() {
         if (loadJob?.isActive == true) return
         loadJob = viewModelScope.launch {
             _appsLoading.value = true
             try {
                 _storageOverview.value = repository.getStorageOverview()
-                _installedApps.value = repository.getInstalledApps()
+                _rawApps.value = repository.getInstalledApps()
             } finally { _appsLoading.value = false }
         }
     }
 
     fun toggleAppSelection(app: AppStorageInfo) {
-        _installedApps.value = _installedApps.value.map {
+        if (app.isIgnored) return
+        _rawApps.value = _rawApps.value.map {
             if (it.packageName == app.packageName) it.copy(selected = !it.selected) else it
         }
     }
 
-    fun selectAllApps() {
-        _installedApps.value = _installedApps.value.map { it.copy(selected = true) }
+    // Single toggle button drives both directions: selects everything
+    // currently visible (under the active filter, excluding ignored apps) if
+    // not all of it is selected yet, otherwise clears all of it. The UI shows
+    // one button whose label flips between "Select All" / "Unselect All".
+    fun toggleSelectAllVisible() {
+        val visible = installedApps.value
+        val selectable = visible.filter { !it.isIgnored }
+        val allSelected = selectable.isNotEmpty() && selectable.all { it.selected }
+        val visiblePkgs = visible.map { it.packageName }.toSet()
+        _rawApps.value = _rawApps.value.map {
+            when {
+                it.packageName !in visiblePkgs -> it
+                allSelected -> it.copy(selected = false)
+                it.isIgnored -> it
+                else -> it.copy(selected = true)
+            }
+        }
     }
 
-    fun unselectAllApps() {
-        _installedApps.value = _installedApps.value.map { it.copy(selected = false) }
+    fun toggleIgnore(app: AppStorageInfo) {
+        viewModelScope.launch {
+            if (app.isIgnored) {
+                ignoreListPreference.removeFromIgnoreList(app.packageName)
+            } else {
+                ignoreListPreference.addToIgnoreList(app.packageName)
+                // Can no longer be selected once ignored — clear any existing selection.
+                _rawApps.value = _rawApps.value.map {
+                    if (it.packageName == app.packageName) it.copy(selected = false) else it
+                }
+            }
+        }
     }
 
     fun cancelBulkAction() {
@@ -126,6 +183,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun forceStopSingleApp(app: AppStorageInfo) {
+        if (app.isIgnored) {
+            _statusMessage.value = "${app.appName} is on the ignore list"
+            return
+        }
         viewModelScope.launch {
             val service = ShizukuHelper.cacheService
             if (service == null) {
@@ -138,7 +199,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearSelectedAppsCache() {
-        val targets = _installedApps.value.filter { it.selected }
+        val targets = _rawApps.value.filter { it.selected }
         if (targets.isEmpty()) return
         runBulkAction(targets, actionLabel = "Clearing cache") { service, app ->
             repository.clearAppCache(service, app.packageName)
@@ -146,7 +207,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun forceStopSelectedApps() {
-        val targets = _installedApps.value.filter { it.selected }
+        // Defense in depth: even though ignored apps' checkboxes are disabled
+        // in the UI, never force-stop one even if it somehow ended up selected.
+        val targets = _rawApps.value.filter { it.selected && it.packageName !in _ignoredPackages.value }
         if (targets.isEmpty()) return
         runBulkAction(targets, actionLabel = "Force stopping") { service, app ->
             repository.forceStopApp(service, app.packageName)
@@ -156,7 +219,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun runBulkAction(
         targets: List<AppStorageInfo>,
         actionLabel: String,
-        action: suspend (com.shohan.cleanspace.shizuku.ICacheService, AppStorageInfo) -> Boolean
+        action: suspend (ICacheService, AppStorageInfo) -> Boolean
     ) {
         if (bulkJob?.isActive == true) return
         bulkJob = viewModelScope.launch {

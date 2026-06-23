@@ -13,10 +13,13 @@ data class AppStorageInfo(
     val cacheBytes: Long,
     val dataBytes: Long,
     val isSystemApp: Boolean,
-    val selected: Boolean = false
+    val selected: Boolean = false,
+    val isIgnored: Boolean = false
 ) {
     val totalBytes: Long get() = appBytes + cacheBytes + dataBytes
 }
+
+enum class AppFilter { ALL, USER, SYSTEM }
 
 enum class ThemeMode { LIGHT, DARK, SYSTEM }
 
