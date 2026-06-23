@@ -60,7 +60,7 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
             Divider()
             Spacer(Modifier.height(16.dp))
             Text("CleanSpace v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
-            Text("Storage cleaner for Android", style = MaterialTheme.typography.bodyMedium)
+            Text("App cache cleaner & force stop", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

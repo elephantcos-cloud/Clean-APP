@@ -1,7 +1,6 @@
 package com.shohan.cleanspace.viewmodel
 
 import android.app.Application
-import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shohan.cleanspace.data.PermissionHelper
@@ -9,111 +8,47 @@ import com.shohan.cleanspace.data.StorageRepository
 import com.shohan.cleanspace.data.ThemePreference
 import com.shohan.cleanspace.data.models.AppPermissions
 import com.shohan.cleanspace.data.models.AppStorageInfo
-import com.shohan.cleanspace.data.models.CategorySize
-import com.shohan.cleanspace.data.models.DuplicateGroup
-import com.shohan.cleanspace.data.models.JunkFile
-import com.shohan.cleanspace.data.models.LargeFile
-import com.shohan.cleanspace.data.models.MediaAppInfo
-import com.shohan.cleanspace.data.models.OrphanedItem
+import com.shohan.cleanspace.data.models.BulkActionProgress
 import com.shohan.cleanspace.data.models.StorageOverview
 import com.shohan.cleanspace.data.models.ThemeMode
 import com.shohan.cleanspace.shizuku.ShizukuHelper
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = StorageRepository(application)
     private val themePreference = ThemePreference(application)
 
-    private var dashboardJob: Job? = null
-    private var junkJob: Job? = null
-    private var largeFilesJob: Job? = null
-    private var duplicatesJob: Job? = null
-    private var orphanedJob: Job? = null
-    private var mediaJob: Job? = null
-    private var appsJob: Job? = null
+    private var loadJob: Job? = null
+    private var bulkJob: Job? = null
 
     private val _storageOverview = MutableStateFlow(StorageOverview())
     val storageOverview: StateFlow<StorageOverview> = _storageOverview.asStateFlow()
 
-    private val _categoryBreakdown = MutableStateFlow<List<CategorySize>>(emptyList())
-    val categoryBreakdown: StateFlow<List<CategorySize>> = _categoryBreakdown.asStateFlow()
-
-    private val _junkFiles = MutableStateFlow<List<JunkFile>>(emptyList())
-    val junkFiles: StateFlow<List<JunkFile>> = _junkFiles.asStateFlow()
-
-    private val _largeFiles = MutableStateFlow<List<LargeFile>>(emptyList())
-    val largeFiles: StateFlow<List<LargeFile>> = _largeFiles.asStateFlow()
-
     private val _installedApps = MutableStateFlow<List<AppStorageInfo>>(emptyList())
     val installedApps: StateFlow<List<AppStorageInfo>> = _installedApps.asStateFlow()
-
-    private val _duplicateGroups = MutableStateFlow<List<DuplicateGroup>>(emptyList())
-    val duplicateGroups: StateFlow<List<DuplicateGroup>> = _duplicateGroups.asStateFlow()
-
-    private val _mediaApps = MutableStateFlow<List<MediaAppInfo>>(emptyList())
-    val mediaApps: StateFlow<List<MediaAppInfo>> = _mediaApps.asStateFlow()
-
-    private val _orphanedItems = MutableStateFlow<List<OrphanedItem>>(emptyList())
-    val orphanedItems: StateFlow<List<OrphanedItem>> = _orphanedItems.asStateFlow()
-
-    private val _permissions = MutableStateFlow(AppPermissions())
-    val permissions: StateFlow<AppPermissions> = _permissions.asStateFlow()
-
-    // Fix: each feature now has its OWN loading flag instead of one shared global
-    // `isLoading`. Previously every screen read the same flag, so e.g. scanning
-    // Large Files while sitting on the Junk screen would make the Junk screen
-    // incorrectly show a "Scanning..." spinner and hide its already-loaded list.
-    private val _dashboardLoading = MutableStateFlow(false)
-    val dashboardLoading: StateFlow<Boolean> = _dashboardLoading.asStateFlow()
-
-    private val _junkLoading = MutableStateFlow(false)
-    val junkLoading: StateFlow<Boolean> = _junkLoading.asStateFlow()
-
-    private val _largeFilesLoading = MutableStateFlow(false)
-    val largeFilesLoading: StateFlow<Boolean> = _largeFilesLoading.asStateFlow()
-
-    private val _duplicatesLoading = MutableStateFlow(false)
-    val duplicatesLoading: StateFlow<Boolean> = _duplicatesLoading.asStateFlow()
-
-    private val _orphanedLoading = MutableStateFlow(false)
-    val orphanedLoading: StateFlow<Boolean> = _orphanedLoading.asStateFlow()
-
-    private val _mediaLoading = MutableStateFlow(false)
-    val mediaLoading: StateFlow<Boolean> = _mediaLoading.asStateFlow()
 
     private val _appsLoading = MutableStateFlow(false)
     val appsLoading: StateFlow<Boolean> = _appsLoading.asStateFlow()
 
-    // Used only by the Dashboard's top-bar cancel/refresh icon, which is meant to
-    // act as a "stop any background scan" control — this is the one legitimate
-    // case where combining all feature flags into one is the correct behavior.
-    val isAnyLoading: StateFlow<Boolean> = combine(
-        _dashboardLoading, _junkLoading, _largeFilesLoading,
-        _duplicatesLoading, _orphanedLoading, _mediaLoading, _appsLoading
-    ) { states -> states.any { it } }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val _permissions = MutableStateFlow(AppPermissions())
+    val permissions: StateFlow<AppPermissions> = _permissions.asStateFlow()
 
-    private val _bulkClearProgress = MutableStateFlow<Pair<Int, Int>?>(null)
-    val bulkClearProgress: StateFlow<Pair<Int, Int>?> = _bulkClearProgress.asStateFlow()
+    // Fix: this now carries the current app's NAME + index/total (not just a
+    // count), so the UI can show a genuine live "Clearing: WhatsApp (12/45)"
+    // screen instead of a generic spinner.
+    private val _bulkActionProgress = MutableStateFlow<BulkActionProgress?>(null)
+    val bulkActionProgress: StateFlow<BulkActionProgress?> = _bulkActionProgress.asStateFlow()
 
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
     private val _themeMode = MutableStateFlow(ThemeMode.SYSTEM)
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
-
-    private val _lowStorageWarning = MutableStateFlow(false)
-    val lowStorageWarning: StateFlow<Boolean> = _lowStorageWarning.asStateFlow()
 
     init {
         refreshPermissions()
@@ -125,7 +60,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshPermissions() {
         val ctx = getApplication<Application>()
         _permissions.value = AppPermissions(
-            allFilesAccess = PermissionHelper.hasAllFilesAccess(),
             usageAccess = PermissionHelper.hasUsageAccess(ctx),
             shizukuInstalled = ShizukuHelper.isShizukuInstalled(ctx),
             shizukuRunning = ShizukuHelper.isShizukuRunning(),
@@ -147,266 +81,103 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { themePreference.setThemeMode(mode) }
     }
 
-    fun cancelCurrentScan() {
-        dashboardJob?.cancel()
-        junkJob?.cancel()
-        largeFilesJob?.cancel()
-        duplicatesJob?.cancel()
-        orphanedJob?.cancel()
-        mediaJob?.cancel()
-        appsJob?.cancel()
-        _dashboardLoading.value = false
-        _junkLoading.value = false
-        _largeFilesLoading.value = false
-        _duplicatesLoading.value = false
-        _orphanedLoading.value = false
-        _mediaLoading.value = false
-        _appsLoading.value = false
-        _statusMessage.value = "Scan cancelled"
-    }
-
-    fun loadDashboard() {
-        if (dashboardJob?.isActive == true) return
-        dashboardJob = viewModelScope.launch {
-            _dashboardLoading.value = true
+    fun loadHome() {
+        if (loadJob?.isActive == true) return
+        loadJob = viewModelScope.launch {
+            _appsLoading.value = true
             try {
                 _storageOverview.value = repository.getStorageOverview()
-                _categoryBreakdown.value = repository.getCategoryBreakdown()
-                _lowStorageWarning.value = _storageOverview.value.freeBytes < 500L * 1024 * 1024
-            } finally { _dashboardLoading.value = false }
+                _installedApps.value = repository.getInstalledApps()
+            } finally { _appsLoading.value = false }
         }
     }
 
-    fun scanJunk() {
-        if (junkJob?.isActive == true) return
-        junkJob = viewModelScope.launch {
-            _junkLoading.value = true
-            try { _junkFiles.value = repository.scanJunkFiles() }
-            finally { _junkLoading.value = false }
+    fun toggleAppSelection(app: AppStorageInfo) {
+        _installedApps.value = _installedApps.value.map {
+            if (it.packageName == app.packageName) it.copy(selected = !it.selected) else it
         }
     }
 
-    fun toggleJunkSelection(junkFile: JunkFile) {
-        _junkFiles.value = _junkFiles.value.map {
-            if (it.path == junkFile.path) it.copy(selected = !it.selected) else it
-        }
+    fun selectAllApps() {
+        _installedApps.value = _installedApps.value.map { it.copy(selected = true) }
     }
 
-    fun deleteSelectedJunk() {
-        viewModelScope.launch {
-            _junkLoading.value = true
-            try {
-                val selected = _junkFiles.value.filter { it.selected }
-                var freed = 0L
-                withContext(Dispatchers.IO) {
-                    selected.forEach { if (repository.deleteJunkFile(it)) freed += it.sizeBytes }
-                }
-                _statusMessage.value = "${selected.size} items deleted — ${formatBytes(freed)} freed"
-                _junkFiles.value = repository.scanJunkFiles()
-            } finally { _junkLoading.value = false }
-        }
+    fun unselectAllApps() {
+        _installedApps.value = _installedApps.value.map { it.copy(selected = false) }
     }
 
-    fun clearOwnAppCache() {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { repository.clearOwnAppCache() }
-            _statusMessage.value = "App cache cleared"
-            scanJunk()
-        }
+    fun cancelBulkAction() {
+        bulkJob?.cancel()
+        _bulkActionProgress.value = null
+        _statusMessage.value = "Cancelled"
     }
 
-    fun scanLargeFiles(thresholdMB: Long = 50) {
-        if (largeFilesJob?.isActive == true) return
-        largeFilesJob = viewModelScope.launch {
-            _largeFilesLoading.value = true
-            try { _largeFiles.value = repository.scanLargeFiles(thresholdMB * 1024 * 1024) }
-            finally { _largeFilesLoading.value = false }
-        }
-    }
-
-    fun deleteLargeFile(file: LargeFile) {
-        viewModelScope.launch {
-            val deleted = withContext(Dispatchers.IO) { repository.deleteLargeFile(file) }
-            if (deleted) {
-                _largeFiles.value = _largeFiles.value.filter { it.path != file.path }
-                _statusMessage.value = "${file.name} deleted"
-            }
-        }
-    }
-
-    fun loadApps() {
-        if (appsJob?.isActive == true) return
-        appsJob = viewModelScope.launch {
-            _appsLoading.value = true
-            try { _installedApps.value = repository.getInstalledApps() }
-            finally { _appsLoading.value = false }
-        }
-    }
-
-    fun scanDuplicates() {
-        if (duplicatesJob?.isActive == true) return
-        duplicatesJob = viewModelScope.launch {
-            _duplicatesLoading.value = true
-            try { _duplicateGroups.value = repository.scanDuplicates() }
-            finally { _duplicatesLoading.value = false }
-        }
-    }
-
-    fun toggleDuplicateKeep(groupIndex: Int, filePath: String) {
-        val groups = _duplicateGroups.value.toMutableList()
-        val group = groups.getOrNull(groupIndex) ?: return
-        val updatedFiles = group.files.map {
-            if (it.path == filePath) it.copy(keepThisOne = !it.keepThisOne) else it
-        }
-        groups[groupIndex] = group.copy(files = updatedFiles)
-        _duplicateGroups.value = groups
-    }
-
-    fun deleteUnselectedDuplicates() {
-        viewModelScope.launch {
-            _duplicatesLoading.value = true
-            try {
-                var freed = 0L
-                var deletedCount = 0
-                _duplicateGroups.value.forEach { group ->
-                    group.files.filter { !it.keepThisOne }.forEach { file ->
-                        val deleted = withContext(Dispatchers.IO) { repository.deleteFile(file.path) }
-                        if (deleted) {
-                            freed += file.sizeBytes
-                            deletedCount++
-                        }
-                    }
-                }
-                _statusMessage.value = "$deletedCount duplicates deleted — ${formatBytes(freed)} freed"
-                _duplicateGroups.value = repository.scanDuplicates()
-            } finally { _duplicatesLoading.value = false }
-        }
-    }
-
-    fun scanMediaApps() {
-        if (mediaJob?.isActive == true) return
-        mediaJob = viewModelScope.launch {
-            _mediaLoading.value = true
-            try { _mediaApps.value = repository.scanMediaApps() }
-            finally { _mediaLoading.value = false }
-        }
-    }
-
-    fun deleteMediaCategory(packageName: String, categoryName: String) {
-        viewModelScope.launch {
-            _mediaLoading.value = true
-            try {
-                val freed = repository.deleteMediaCategory(packageName, categoryName)
-                _statusMessage.value = "${formatBytes(freed)} freed"
-                _mediaApps.value = repository.scanMediaApps()
-            } finally { _mediaLoading.value = false }
-        }
-    }
-
-    fun scanOrphanedData() {
-        if (orphanedJob?.isActive == true) return
-        orphanedJob = viewModelScope.launch {
-            val service = ShizukuHelper.cacheService
-            if (service == null) {
-                _statusMessage.value = "Shizuku must be running for this feature"
-                return@launch
-            }
-            _orphanedLoading.value = true
-            try { _orphanedItems.value = repository.scanOrphanedData(service) }
-            finally { _orphanedLoading.value = false }
-        }
-    }
-
-    fun toggleOrphanedSelection(item: OrphanedItem) {
-        _orphanedItems.value = _orphanedItems.value.map {
-            if (it.path == item.path) it.copy(selected = !it.selected) else it
-        }
-    }
-
-    fun deleteSelectedOrphaned() {
+    fun clearSingleAppCache(app: AppStorageInfo) {
         viewModelScope.launch {
             val service = ShizukuHelper.cacheService
             if (service == null) {
                 _statusMessage.value = "Shizuku is not connected"
                 return@launch
             }
-            _orphanedLoading.value = true
-            try {
-                val selected = _orphanedItems.value.filter { it.selected }
-                var freed = 0L
-                var deletedCount = 0
-                selected.forEach { item ->
-                    if (repository.deleteOrphanedItem(service, item.path)) {
-                        freed += item.sizeBytes
-                        deletedCount++
-                    }
-                }
-                _statusMessage.value = "$deletedCount folders deleted — ${formatBytes(freed)} freed"
-                _orphanedItems.value = repository.scanOrphanedData(service)
-            } finally { _orphanedLoading.value = false }
+            val ok = repository.clearAppCache(service, app.packageName)
+            _statusMessage.value = if (ok) "${app.appName} cache cleared" else "Failed to clear ${app.appName}"
+            loadHome()
         }
     }
 
-    // Fix: `service.runCommand(...)` is a synchronous/blocking Binder IPC call.
-    // viewModelScope.launch{} runs on the Main dispatcher by default, so calling
-    // a blocking IPC method directly here — especially in a loop over every
-    // installed app — would freeze the UI thread and risk an ANR. All Shizuku
-    // command calls are now wrapped in withContext(Dispatchers.IO).
-    fun clearAllAppsCacheViaShizuku() {
+    fun forceStopSingleApp(app: AppStorageInfo) {
         viewModelScope.launch {
+            val service = ShizukuHelper.cacheService
+            if (service == null) {
+                _statusMessage.value = "Shizuku is not connected"
+                return@launch
+            }
+            val ok = repository.forceStopApp(service, app.packageName)
+            _statusMessage.value = if (ok) "${app.appName} stopped" else "Failed to stop ${app.appName}"
+        }
+    }
+
+    fun clearSelectedAppsCache() {
+        val targets = _installedApps.value.filter { it.selected }
+        if (targets.isEmpty()) return
+        runBulkAction(targets, actionLabel = "Clearing cache") { service, app ->
+            repository.clearAppCache(service, app.packageName)
+        }
+    }
+
+    fun forceStopSelectedApps() {
+        val targets = _installedApps.value.filter { it.selected }
+        if (targets.isEmpty()) return
+        runBulkAction(targets, actionLabel = "Force stopping") { service, app ->
+            repository.forceStopApp(service, app.packageName)
+        }
+    }
+
+    private fun runBulkAction(
+        targets: List<AppStorageInfo>,
+        actionLabel: String,
+        action: suspend (com.shohan.cleanspace.shizuku.ICacheService, AppStorageInfo) -> Boolean
+    ) {
+        if (bulkJob?.isActive == true) return
+        bulkJob = viewModelScope.launch {
             val service = ShizukuHelper.cacheService
             if (service == null) {
                 _statusMessage.value = "Shizuku service not connected. Is Shizuku running?"
                 return@launch
             }
-            if (_installedApps.value.isEmpty()) {
-                _installedApps.value = repository.getInstalledApps()
-            }
-            val targets = _installedApps.value.filter { !it.isSystemApp }
             var success = 0
-            withContext(Dispatchers.IO) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    targets.forEachIndexed { index, app ->
-                        try {
-                            service.runCommand("pm clear --cache-only ${app.packageName}")
-                            success++
-                        } catch (_: Exception) {}
-                        _bulkClearProgress.value = Pair(index + 1, targets.size)
-                    }
-                } else {
-                    try {
-                        service.runCommand("pm trim-caches 999999999999")
-                        success = targets.size
-                    } catch (_: Exception) {}
-                    _bulkClearProgress.value = Pair(targets.size, targets.size)
-                }
+            targets.forEachIndexed { index, app ->
+                _bulkActionProgress.value = BulkActionProgress(
+                    actionLabel = actionLabel,
+                    currentAppName = app.appName,
+                    currentIndex = index + 1,
+                    total = targets.size
+                )
+                if (action(service, app)) success++
             }
-            _statusMessage.value = "$success apps cleaned successfully"
-            _bulkClearProgress.value = null
-            loadApps()
-        }
-    }
-
-    fun clearSingleAppCacheViaShizuku(app: AppStorageInfo) {
-        viewModelScope.launch {
-            val service = ShizukuHelper.cacheService
-            if (service == null) {
-                _statusMessage.value = "Shizuku is not running"
-                return@launch
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        service.runCommand("pm clear --cache-only ${app.packageName}")
-                    } else {
-                        service.runCommand("pm trim-caches 999999999999")
-                    }
-                }
-                _statusMessage.value = "${app.appName} cache cleared"
-            } catch (e: Exception) {
-                _statusMessage.value = "Failed: ${e.message}"
-            }
-            loadApps()
+            _bulkActionProgress.value = null
+            _statusMessage.value = "$actionLabel: $success/${targets.size} apps done"
+            loadHome()
         }
     }
 

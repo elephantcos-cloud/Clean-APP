@@ -1,5 +1,6 @@
 package com.shohan.cleanspace.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,20 +11,29 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,48 +42,201 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.shohan.cleanspace.data.PermissionHelper
+import com.shohan.cleanspace.data.models.AppStorageInfo
+import com.shohan.cleanspace.ui.components.DonutChart
+import com.shohan.cleanspace.ui.components.DonutSlice
+import com.shohan.cleanspace.ui.theme.Emerald600
 import com.shohan.cleanspace.viewmodel.MainViewModel
+
+private enum class PendingBulkAction { CLEAR_CACHE, FORCE_STOP }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
     val apps by viewModel.installedApps.collectAsState()
+    val overview by viewModel.storageOverview.collectAsState()
     val isLoading by viewModel.appsLoading.collectAsState()
     val permissions by viewModel.permissions.collectAsState()
-    val bulkProgress by viewModel.bulkClearProgress.collectAsState()
+    val bulkProgress by viewModel.bulkActionProgress.collectAsState()
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) { viewModel.loadApps() }
+    var pendingBulkAction by remember { mutableStateOf<PendingBulkAction?>(null) }
+    var pendingForceStopApp by remember { mutableStateOf<AppStorageInfo?>(null) }
+
+    LaunchedEffect(Unit) { viewModel.loadHome() }
 
     val shizukuReady = permissions.shizukuRunning && permissions.shizukuPermission
+    val selectedApps = apps.filter { it.selected }
+    val selectedCacheBytes = selectedApps.sumOf { it.cacheBytes }
+    val totalCacheBytes = apps.sumOf { it.cacheBytes }
+
+    // Single app force-stop confirmation — mirrors Android's own native
+    // "Force stop?" warning dialog, since force-stopping can make an app misbehave.
+    pendingForceStopApp?.let { app ->
+        AlertDialog(
+            onDismissRequest = { pendingForceStopApp = null },
+            title = { Text("Force stop ${app.appName}?") },
+            text = { Text("If you force stop an app, it may misbehave.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingForceStopApp = null
+                    viewModel.forceStopSingleApp(app)
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingForceStopApp = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Bulk action confirmation (clear cache / force stop across all selected apps)
+    pendingBulkAction?.let { action ->
+        val isForceStop = action == PendingBulkAction.FORCE_STOP
+        AlertDialog(
+            onDismissRequest = { pendingBulkAction = null },
+            title = { Text(if (isForceStop) "Force stop ${selectedApps.size} apps?" else "Clear cache for ${selectedApps.size} apps?") },
+            text = {
+                Text(
+                    if (isForceStop) "If you force stop these apps, they may misbehave."
+                    else "This will free up approximately ${MainViewModel.formatBytes(selectedCacheBytes)}."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingBulkAction = null
+                    if (isForceStop) viewModel.forceStopSelectedApps() else viewModel.clearSelectedAppsCache()
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingBulkAction = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Live progress screen — shows exactly which app is being processed right now,
+    // updating in real time as the bulk job works through the selected apps.
+    bulkProgress?.let { progress ->
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text(progress.actionLabel) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("${progress.currentAppName} (${progress.currentIndex}/${progress.total})")
+                    Spacer(Modifier.height(12.dp))
+                    LinearProgressIndicator(
+                        progress = progress.currentIndex / progress.total.toFloat(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.cancelBulkAction() }) { Text("Cancel") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("App Manager") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                title = { Text("CleanSpace") },
+                actions = {
+                    IconButton(onClick = { viewModel.loadHome() }) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                    }
+                    IconButton(onClick = { navController.navigate("settings") }) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 }
             )
+        },
+        bottomBar = {
+            if (selectedApps.isNotEmpty()) {
+                BottomAppBar {
+                    Text(
+                        "${selectedApps.size} selected  •  ${MainViewModel.formatBytes(selectedCacheBytes)}",
+                        modifier = Modifier.weight(1f).padding(start = 16.dp),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (shizukuReady) {
+                        OutlinedButton(onClick = { pendingBulkAction = PendingBulkAction.FORCE_STOP }) {
+                            Text("Force Stop")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = { pendingBulkAction = PendingBulkAction.CLEAR_CACHE },
+                            modifier = Modifier.padding(end = 16.dp)
+                        ) { Text("Clear Cache") }
+                    }
+                }
+            }
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
-            if (!shizukuReady) {
-                Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("One-tap cache clearing", style = MaterialTheme.typography.titleMedium)
+            // Storage overview — simple, accurate Total/Used/Free (no per-category
+            // breakdown, which previously double-counted app media as both "Apps"
+            // and "Images/Videos/Audio" and showed an impossible total).
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val usedPct = if (overview.totalBytes > 0)
+                        (overview.usedBytes * 100 / overview.totalBytes).toInt() else 0
+
+                    DonutChart(
+                        slices = listOf(
+                            DonutSlice(overview.usedBytes.toFloat().coerceAtLeast(0f), Emerald600, "Used"),
+                            DonutSlice(overview.freeBytes.toFloat().coerceAtLeast(0f), Color.LightGray, "Free")
+                        ),
+                        modifier = Modifier.fillMaxWidth(0.6f),
+                        centerLabel = "$usedPct%",
+                        centerSubLabel = "Used"
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "${MainViewModel.formatBytes(overview.usedBytes)} / ${MainViewModel.formatBytes(overview.totalBytes)}",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        "${MainViewModel.formatBytes(overview.freeBytes)} free",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (totalCacheBytes > 0) {
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Activate Shizuku to clear all app caches at once. Without it, you can still open each app's settings individually.",
+                            "Reclaimable app cache: ${MainViewModel.formatBytes(totalCacheBytes)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            if (!shizukuReady) {
+                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("One-tap cache clearing & force stop", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Activate Shizuku to clear app caches and force-stop apps. Without it, you can still open each app's settings individually.",
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(Modifier.height(12.dp))
@@ -102,17 +265,16 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                     }
                 }
             } else {
-                Button(
-                    onClick = { viewModel.clearAllAppsCacheViaShizuku() },
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    enabled = bulkProgress == null
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.CleaningServices, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (bulkProgress != null) "Cleaning... ${bulkProgress!!.first}/${bulkProgress!!.second}"
-                        else "Clear Cache — All Apps"
-                    )
+                    Text("${apps.size} apps", style = MaterialTheme.typography.bodyMedium)
+                    Row {
+                        TextButton(onClick = { viewModel.selectAllApps() }) { Text("Select All") }
+                        TextButton(onClick = { viewModel.unselectAllApps() }) { Text("Unselect All") }
+                    }
                 }
             }
 
@@ -125,18 +287,36 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                     ) {
                         CircularProgressIndicator()
                     }
+                } else if (apps.isEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        com.shohan.cleanspace.ui.components.EmptyState(
+                            icon = Icons.Filled.Info,
+                            title = "No Apps Found",
+                            subtitle = "Make sure Usage Access is granted, then tap refresh."
+                        )
+                    }
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(apps, key = { it.packageName }) { app ->
                             Card(modifier = Modifier.fillMaxWidth()) {
                                 Row(
-                                    modifier = Modifier.padding(12.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    if (shizukuReady) {
+                                        Checkbox(
+                                            checked = app.selected,
+                                            onCheckedChange = { viewModel.toggleAppSelection(app) }
+                                        )
+                                    }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(app.appName, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                                         Text(
@@ -145,8 +325,11 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                                         )
                                     }
                                     if (shizukuReady) {
-                                        TextButton(onClick = { viewModel.clearSingleAppCacheViaShizuku(app) }) {
-                                            Text("Clear")
+                                        IconButton(onClick = { pendingForceStopApp = app }) {
+                                            Icon(Icons.Filled.PowerSettingsNew, contentDescription = "Force Stop")
+                                        }
+                                        IconButton(onClick = { viewModel.clearSingleAppCache(app) }) {
+                                            Icon(Icons.Filled.CleaningServices, contentDescription = "Clear Cache")
                                         }
                                     } else {
                                         IconButton(onClick = {

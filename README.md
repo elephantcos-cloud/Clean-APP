@@ -1,17 +1,15 @@
-# CleanSpace — Android Storage Cleaner
+# CleanSpace — App Cache Cleaner & Force Stop
 
-A fast, privacy-respecting Android storage cleaner built with Jetpack Compose, MVVM, and Shizuku.
+A simple, single-purpose Android app cache cleaner with Shizuku-powered force stop, built with Jetpack Compose, MVVM, and Shizuku.
 
 ## Features
 
 | Tool | Description |
 |------|-------------|
-| **Junk Cleaner** | Temp files, empty folders |
-| **Large Files** | Files over 50 MB — images, videos, documents, APKs |
-| **Duplicate Finder** | Finds exact copies using size + MD5 hash |
-| **Orphaned Data** | Leftover folders from uninstalled apps (Shizuku required) |
-| **Media Cleaner** | WhatsApp / Telegram / Messenger / Facebook media by category |
-| **App Manager** | Per-app storage breakdown + Shizuku bulk cache clear |
+| **Storage Overview** | Accurate Total/Used/Free, plus total reclaimable app cache |
+| **App Cache Cleaner** | Per-app or bulk (multi-select) cache clearing via Shizuku |
+| **Force Stop** | Per-app or bulk force-stop via Shizuku, with confirmation |
+| **Live progress** | Bulk actions show which app is being processed in real time |
 
 ## Build (GitHub Actions — no local setup needed)
 
@@ -51,9 +49,8 @@ GitHub Actions will automatically build a debug APK. Download it from the **Acti
 
 | Permission | Purpose |
 |-----------|---------|
-| All Files Access | Scan storage for junk and large files |
-| Usage Access | Show per-app storage breakdown |
-| Shizuku (optional) | One-tap bulk cache clear + Orphaned Data scan |
+| Usage Access | Show per-app cache/storage size |
+| Shizuku | Required to actually clear cache / force-stop apps |
 
 ## Shizuku Setup (Wireless Debugging — no PC needed)
 
@@ -61,14 +58,14 @@ GitHub Actions will automatically build a debug APK. Download it from the **Acti
 2. Enable Developer Options (tap Build Number 7 times)
 3. Enable **Wireless Debugging** in Developer Options
 4. Open Shizuku → "Pair using wireless debugging" → tap Start
-5. In CleanSpace → **App Manager** → tap "Grant Permission"
+5. In CleanSpace → tap "Grant Permission"
 6. After phone restart: open Shizuku and tap Start again
 
 ## Technical
 
 - Kotlin 1.9.10 · Compose BOM 2023.10.01 · Material Design 3
 - `compileSdk`/`targetSdk` 34 · `minSdk` 24 · Java 17 · AGP 8.1.4
-- Storage scanning: MediaStore API (fast, no walkTopDown for category breakdown)
+- Storage overview: StatFs (accurate, no category double-counting); per-app stats via StorageStatsManager
 - Icon: Emerald green background + upward arrow
 
 ## Local Gradle wrapper note

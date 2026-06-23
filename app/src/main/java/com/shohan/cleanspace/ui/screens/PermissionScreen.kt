@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Button
@@ -59,14 +58,6 @@ fun PermissionScreen(
         )
         Spacer(Modifier.height(32.dp))
 
-        PermissionCard(
-            icon = Icons.Filled.Folder,
-            title = "All Files Access",
-            description = "Required to scan for junk and large files",
-            granted = permissions.allFilesAccess,
-            onClick = { context.startActivity(PermissionHelper.allFilesAccessIntent(context)) }
-        )
-        Spacer(Modifier.height(16.dp))
         PermissionCard(
             icon = Icons.Filled.Insights,
             title = "Usage Access",

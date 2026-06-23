@@ -14,12 +14,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.shohan.cleanspace.ui.screens.AppsScreen
-import com.shohan.cleanspace.ui.screens.DashboardScreen
-import com.shohan.cleanspace.ui.screens.DuplicatesScreen
-import com.shohan.cleanspace.ui.screens.JunkScreen
-import com.shohan.cleanspace.ui.screens.LargeFilesScreen
-import com.shohan.cleanspace.ui.screens.MediaCleanerScreen
-import com.shohan.cleanspace.ui.screens.OrphanedDataScreen
 import com.shohan.cleanspace.ui.screens.PermissionScreen
 import com.shohan.cleanspace.ui.screens.SettingsScreen
 import com.shohan.cleanspace.viewmodel.MainViewModel
@@ -37,13 +31,15 @@ fun CleanSpaceRoot(viewModel: MainViewModel) {
         }
     }
 
-    // Fix 5: Scaffold wraps EVERYTHING — Snackbar now works on PermissionScreen too
+    // Scaffold wraps EVERYTHING — Snackbar works on PermissionScreen too
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         val navController = rememberNavController()
 
-        if (!permissions.allFilesAccess || !permissions.usageAccess) {
+        // Fix: All Files Access is no longer required — this simplified app only
+        // clears app cache and force-stops apps, both via Shizuku + Usage Access.
+        if (!permissions.usageAccess) {
             PermissionScreen(
                 permissions = permissions,
                 onRefresh = { viewModel.refreshPermissions() },
@@ -57,13 +53,7 @@ fun CleanSpaceRoot(viewModel: MainViewModel) {
             startDestination = "home",
             modifier = Modifier.padding(padding)
         ) {
-            composable("home") { DashboardScreen(viewModel, navController) }
-            composable("junk") { JunkScreen(viewModel, navController) }
-            composable("large_files") { LargeFilesScreen(viewModel, navController) }
-            composable("duplicates") { DuplicatesScreen(viewModel, navController) }
-            composable("orphaned") { OrphanedDataScreen(viewModel, navController) }
-            composable("media_cleaner") { MediaCleanerScreen(viewModel, navController) }
-            composable("apps") { AppsScreen(viewModel, navController) }
+            composable("home") { AppsScreen(viewModel, navController) }
             composable("settings") { SettingsScreen(viewModel, navController) }
         }
     }
