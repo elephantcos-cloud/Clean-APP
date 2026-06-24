@@ -1,6 +1,7 @@
 package com.shohan.cleanspace.data
 
 import android.app.usage.StorageStatsManager
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.os.Build
@@ -34,6 +35,24 @@ class StorageRepository(private val context: Context) {
 
     // ── Installed Apps (cache + force-stop) ─────────────────────────────────────
 
+    // Last-used timestamp per package via UsageStatsManager (same Usage Access
+    // permission already required for StorageStatsManager — no extra permission
+    // needed). INTERVAL_BEST can return several overlapping buckets per package,
+    // so the largest lastTimeUsed across all of them is kept.
+    private fun lastUsedTimes(): Map<String, Long> {
+        val usageMap = HashMap<String, Long>()
+        try {
+            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val end = System.currentTimeMillis()
+            val start = 0L
+            usm.queryUsageStats(UsageStatsManager.INTERVAL_BEST, start, end)?.forEach { stat ->
+                val existing = usageMap[stat.packageName] ?: 0L
+                if (stat.lastTimeUsed > existing) usageMap[stat.packageName] = stat.lastTimeUsed
+            }
+        } catch (_: Exception) {}
+        return usageMap
+    }
+
     suspend fun getInstalledApps(): List<AppStorageInfo> = withContext(Dispatchers.IO) {
         val pm = context.packageManager
         val results = mutableListOf<AppStorageInfo>()
@@ -42,6 +61,7 @@ class StorageRepository(private val context: Context) {
                 val ssm = context.getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
                 val sm  = context.getSystemService(Context.STORAGE_SERVICE) as StorageManager
                 val uuid = sm.getUuidForPath(context.dataDir)
+                val usageMap = lastUsedTimes()
                 pm.getInstalledApplications(0).forEach { app ->
                     try {
                         val stats = ssm.queryStatsForUid(uuid, app.uid)
@@ -51,7 +71,11 @@ class StorageRepository(private val context: Context) {
                             appBytes = stats.appBytes,
                             cacheBytes = stats.cacheBytes,
                             dataBytes = stats.dataBytes,
-                            isSystemApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                            isSystemApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0,
+                            isStopped = (app.flags and ApplicationInfo.FLAG_STOPPED) != 0,
+                            isPersistent = (app.flags and ApplicationInfo.FLAG_PERSISTENT) != 0,
+                            hasLaunchIntent = pm.getLaunchIntentForPackage(app.packageName) != null,
+                            lastUsedTime = usageMap[app.packageName] ?: 0L
                         ))
                     } catch (_: Exception) {}
                 }

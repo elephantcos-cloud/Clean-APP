@@ -14,12 +14,30 @@ data class AppStorageInfo(
     val dataBytes: Long,
     val isSystemApp: Boolean,
     val selected: Boolean = false,
-    val isIgnored: Boolean = false
+    val isIgnored: Boolean = false,
+    // Already force-stopped (or never launched) — ApplicationInfo.FLAG_STOPPED.
+    val isStopped: Boolean = false,
+    // Persistent system process — Android's own Settings app does not offer
+    // Force Stop for these (e.g. "Media Storage"), since stopping them can
+    // destabilize the OS. ApplicationInfo.FLAG_PERSISTENT.
+    val isPersistent: Boolean = false,
+    // No launcher entry point — packageManager.getLaunchIntentForPackage == null.
+    val hasLaunchIntent: Boolean = true,
+    // Last-used timestamp from UsageStatsManager, 0 if never recorded.
+    val lastUsedTime: Long = 0L
 ) {
     val totalBytes: Long get() = appBytes + cacheBytes + dataBytes
+
+    // Apps Android itself won't let you force-stop: persistent system
+    // processes, or anything with no launchable UI at all.
+    val canForceStop: Boolean get() = !isPersistent && hasLaunchIntent
 }
 
 enum class AppFilter { ALL, USER, SYSTEM }
+
+enum class AppTab { CACHE_CLEAN, FORCE_STOP }
+
+enum class AppSortKey { SIZE, DATE }
 
 enum class ThemeMode { LIGHT, DARK, SYSTEM }
 

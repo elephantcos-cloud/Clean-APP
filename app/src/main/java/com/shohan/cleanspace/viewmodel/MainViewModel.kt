@@ -9,7 +9,9 @@ import com.shohan.cleanspace.data.StorageRepository
 import com.shohan.cleanspace.data.ThemePreference
 import com.shohan.cleanspace.data.models.AppFilter
 import com.shohan.cleanspace.data.models.AppPermissions
+import com.shohan.cleanspace.data.models.AppSortKey
 import com.shohan.cleanspace.data.models.AppStorageInfo
+import com.shohan.cleanspace.data.models.AppTab
 import com.shohan.cleanspace.data.models.BulkActionProgress
 import com.shohan.cleanspace.data.models.StorageOverview
 import com.shohan.cleanspace.data.models.ThemeMode
@@ -46,19 +48,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _appFilter = MutableStateFlow(AppFilter.ALL)
     val appFilter: StateFlow<AppFilter> = _appFilter.asStateFlow()
 
+    private val _activeTab = MutableStateFlow(AppTab.CACHE_CLEAN)
+    val activeTab: StateFlow<AppTab> = _activeTab.asStateFlow()
+
+    private val _sortKey = MutableStateFlow(AppSortKey.SIZE)
+    val sortKey: StateFlow<AppSortKey> = _sortKey.asStateFlow()
+
+    private val _sortAscending = MutableStateFlow(false)
+    val sortAscending: StateFlow<Boolean> = _sortAscending.asStateFlow()
+
+    // Bundles the four "how to view the list" settings into one value so they
+    // fit kotlinx.coroutines' typed combine() overloads (which only go up to 5
+    // differently-typed flows) alongside _rawApps and _ignoredPackages below.
+    private data class ViewSettings(
+        val filter: AppFilter,
+        val tab: AppTab,
+        val sortKey: AppSortKey,
+        val sortAscending: Boolean
+    )
+
+    private val _viewSettings: StateFlow<ViewSettings> =
+        combine(_appFilter, _activeTab, _sortKey, _sortAscending) { filter, tab, key, asc ->
+            ViewSettings(filter, tab, key, asc)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, ViewSettings(AppFilter.ALL, AppTab.CACHE_CLEAN, AppSortKey.SIZE, false))
+
     // What the UI actually renders: raw apps with isIgnored freshly applied,
-    // then narrowed by the current All/User/System filter. Recomputes
-    // automatically whenever any of the three inputs change.
+    // narrowed to the active tab (Cache Clean hides zero-cache apps; Force Stop
+    // hides already-stopped apps and anything Android itself won't let you
+    // force-stop), then the All/User/System filter, then sorted.
     val installedApps: StateFlow<List<AppStorageInfo>> =
-        combine(_rawApps, _ignoredPackages, _appFilter) { apps, ignored, filter ->
-            apps.map { it.copy(isIgnored = it.packageName in ignored) }
-                .filter {
-                    when (filter) {
-                        AppFilter.ALL -> true
-                        AppFilter.USER -> !it.isSystemApp
-                        AppFilter.SYSTEM -> it.isSystemApp
-                    }
+        combine(_rawApps, _ignoredPackages, _viewSettings) { apps, ignored, vs ->
+            val withIgnoreFlag = apps.map { it.copy(isIgnored = it.packageName in ignored) }
+            val tabFiltered = when (vs.tab) {
+                AppTab.CACHE_CLEAN -> withIgnoreFlag.filter { it.cacheBytes > 0 }
+                AppTab.FORCE_STOP -> withIgnoreFlag.filter { !it.isStopped && it.canForceStop }
+            }
+            val filtered = tabFiltered.filter {
+                when (vs.filter) {
+                    AppFilter.ALL -> true
+                    AppFilter.USER -> !it.isSystemApp
+                    AppFilter.SYSTEM -> it.isSystemApp
                 }
+            }
+            val sorted = when (vs.sortKey) {
+                AppSortKey.SIZE -> filtered.sortedBy { if (vs.tab == AppTab.CACHE_CLEAN) it.cacheBytes else it.totalBytes }
+                AppSortKey.DATE -> filtered.sortedBy { it.lastUsedTime }
+            }
+            if (vs.sortAscending) sorted else sorted.reversed()
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _appsLoading = MutableStateFlow(false)
@@ -112,6 +148,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAppFilter(filter: AppFilter) { _appFilter.value = filter }
 
+    // Switching tabs clears selection — Cache Clean and Force Stop are now
+    // separate options/lists, so carrying a selection from one into the other
+    // could otherwise apply the wrong action to apps the user never intended.
+    fun setActiveTab(tab: AppTab) {
+        _activeTab.value = tab
+        _rawApps.value = _rawApps.value.map { it.copy(selected = false) }
+    }
+
+    // Tapping the same sort key again flips direction; tapping the other key
+    // switches to it (defaulting to descending — biggest / most recent first).
+    fun setSortKey(key: AppSortKey) {
+        if (_sortKey.value == key) {
+            _sortAscending.value = !_sortAscending.value
+        } else {
+            _sortKey.value = key
+            _sortAscending.value = false
+        }
+    }
+
     fun loadHome() {
         if (loadJob?.isActive == true) return
         loadJob = viewModelScope.launch {
@@ -131,9 +186,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Single toggle button drives both directions: selects everything
-    // currently visible (under the active filter, excluding ignored apps) if
-    // not all of it is selected yet, otherwise clears all of it. The UI shows
-    // one button whose label flips between "Select All" / "Unselect All".
+    // currently visible (under the active tab+filter, excluding ignored apps)
+    // if not all of it is selected yet, otherwise clears all of it. The UI
+    // shows one button whose label flips between "Select All" / "Unselect All".
     fun toggleSelectAllVisible() {
         val visible = installedApps.value
         val selectable = visible.filter { !it.isIgnored }
@@ -195,11 +250,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val ok = repository.forceStopApp(service, app.packageName)
             _statusMessage.value = if (ok) "${app.appName} stopped" else "Failed to stop ${app.appName}"
+            loadHome()
         }
     }
 
     fun clearSelectedAppsCache() {
-        val targets = _rawApps.value.filter { it.selected }
+        // Only ever act on apps currently visible in the active tab+filter —
+        // a stale selection left over from switching tabs/filters (if any
+        // somehow survives) can never leak into a bulk action it wasn't meant for.
+        val visiblePkgs = installedApps.value.map { it.packageName }.toSet()
+        val targets = _rawApps.value.filter { it.selected && it.packageName in visiblePkgs }
         if (targets.isEmpty()) return
         runBulkAction(targets, actionLabel = "Clearing cache") { service, app ->
             repository.clearAppCache(service, app.packageName)
@@ -207,9 +267,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun forceStopSelectedApps() {
-        // Defense in depth: even though ignored apps' checkboxes are disabled
-        // in the UI, never force-stop one even if it somehow ended up selected.
-        val targets = _rawApps.value.filter { it.selected && it.packageName !in _ignoredPackages.value }
+        val visiblePkgs = installedApps.value.map { it.packageName }.toSet()
+        // Defense in depth: even though ignored / non-stoppable apps' checkboxes
+        // are disabled in the UI, never force-stop one even if it somehow ended
+        // up selected.
+        val targets = _rawApps.value.filter {
+            it.selected && it.packageName in visiblePkgs &&
+                it.packageName !in _ignoredPackages.value && it.canForceStop
+        }
         if (targets.isEmpty()) return
         runBulkAction(targets, actionLabel = "Force stopping") { service, app ->
             repository.forceStopApp(service, app.packageName)

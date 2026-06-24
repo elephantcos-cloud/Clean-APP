@@ -1,9 +1,11 @@
 package com.shohan.cleanspace.ui.screens
 
+import android.text.format.DateUtils
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
@@ -37,8 +41,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -57,26 +62,30 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.shohan.cleanspace.data.PermissionHelper
 import com.shohan.cleanspace.data.models.AppFilter
+import com.shohan.cleanspace.data.models.AppSortKey
 import com.shohan.cleanspace.data.models.AppStorageInfo
+import com.shohan.cleanspace.data.models.AppTab
 import com.shohan.cleanspace.ui.components.DonutChart
 import com.shohan.cleanspace.ui.components.DonutSlice
 import com.shohan.cleanspace.ui.theme.Emerald600
 import com.shohan.cleanspace.viewmodel.MainViewModel
-
-private enum class PendingBulkAction { CLEAR_CACHE, FORCE_STOP }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
     val apps by viewModel.installedApps.collectAsState()
     val appFilter by viewModel.appFilter.collectAsState()
+    val activeTab by viewModel.activeTab.collectAsState()
+    val sortKey by viewModel.sortKey.collectAsState()
+    val sortAscending by viewModel.sortAscending.collectAsState()
     val overview by viewModel.storageOverview.collectAsState()
     val isLoading by viewModel.appsLoading.collectAsState()
     val permissions by viewModel.permissions.collectAsState()
     val bulkProgress by viewModel.bulkActionProgress.collectAsState()
     val context = LocalContext.current
 
-    var pendingBulkAction by remember { mutableStateOf<PendingBulkAction?>(null) }
+    var pendingBulkClear by remember { mutableStateOf(false) }
+    var pendingBulkForceStop by remember { mutableStateOf(false) }
     var pendingForceStopApp by remember { mutableStateOf<AppStorageInfo?>(null) }
 
     LaunchedEffect(Unit) { viewModel.loadHome() }
@@ -87,6 +96,10 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
     val totalCacheBytes = apps.sumOf { it.cacheBytes }
     val selectableApps = apps.filter { !it.isIgnored }
     val allVisibleSelected = selectableApps.isNotEmpty() && selectableApps.all { it.selected }
+
+    fun openAppInfo(app: AppStorageInfo) {
+        context.startActivity(PermissionHelper.appSettingsIntent(context, app.packageName))
+    }
 
     // Single app force-stop confirmation — mirrors Android's own native
     // "Force stop?" warning dialog, since force-stopping can make an app misbehave.
@@ -107,26 +120,36 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
         )
     }
 
-    // Bulk action confirmation (clear cache / force stop across all selected apps)
-    pendingBulkAction?.let { action ->
-        val isForceStop = action == PendingBulkAction.FORCE_STOP
+    if (pendingBulkClear) {
         AlertDialog(
-            onDismissRequest = { pendingBulkAction = null },
-            title = { Text(if (isForceStop) "Force stop ${selectedApps.size} apps?" else "Clear cache for ${selectedApps.size} apps?") },
-            text = {
-                Text(
-                    if (isForceStop) "If you force stop these apps, they may misbehave."
-                    else "This will free up approximately ${MainViewModel.formatBytes(selectedCacheBytes)}."
-                )
-            },
+            onDismissRequest = { pendingBulkClear = false },
+            title = { Text("Clear cache for ${selectedApps.size} apps?") },
+            text = { Text("This will free up approximately ${MainViewModel.formatBytes(selectedCacheBytes)}.") },
             confirmButton = {
                 TextButton(onClick = {
-                    pendingBulkAction = null
-                    if (isForceStop) viewModel.forceStopSelectedApps() else viewModel.clearSelectedAppsCache()
+                    pendingBulkClear = false
+                    viewModel.clearSelectedAppsCache()
                 }) { Text("OK") }
             },
             dismissButton = {
-                TextButton(onClick = { pendingBulkAction = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingBulkClear = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (pendingBulkForceStop) {
+        AlertDialog(
+            onDismissRequest = { pendingBulkForceStop = false },
+            title = { Text("Force stop ${selectedApps.size} apps?") },
+            text = { Text("If you force stop these apps, they may misbehave.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingBulkForceStop = false
+                    viewModel.forceStopSelectedApps()
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingBulkForceStop = false }) { Text("Cancel") }
             }
         )
     }
@@ -168,33 +191,39 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
             )
         },
         bottomBar = {
-            if (selectedApps.isNotEmpty()) {
+            // Fix: Cache Clean and Force Stop are now separate options — only the
+            // bulk button relevant to the active tab is ever shown, instead of
+            // both buttons always sitting side by side regardless of context.
+            if (selectedApps.isNotEmpty() && shizukuReady) {
                 BottomAppBar {
                     Text(
-                        "${selectedApps.size} selected  •  ${MainViewModel.formatBytes(selectedCacheBytes)}",
+                        if (activeTab == AppTab.CACHE_CLEAN)
+                            "${selectedApps.size} selected  •  ${MainViewModel.formatBytes(selectedCacheBytes)}"
+                        else
+                            "${selectedApps.size} selected",
                         modifier = Modifier.weight(1f).padding(start = 16.dp),
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    if (shizukuReady) {
-                        OutlinedButton(onClick = { pendingBulkAction = PendingBulkAction.FORCE_STOP }) {
-                            Text("Force Stop")
-                        }
-                        Spacer(Modifier.width(8.dp))
+                    if (activeTab == AppTab.CACHE_CLEAN) {
                         Button(
-                            onClick = { pendingBulkAction = PendingBulkAction.CLEAR_CACHE },
+                            onClick = { pendingBulkClear = true },
                             modifier = Modifier.padding(end = 16.dp)
                         ) { Text("Clear Cache") }
+                    } else {
+                        Button(
+                            onClick = { pendingBulkForceStop = true },
+                            modifier = Modifier.padding(end = 16.dp)
+                        ) { Text("Force Stop") }
                     }
                 }
             }
         }
     ) { padding ->
-        // Fix: everything is now ONE scrollable LazyColumn (storage card, filter
-        // chips, select-all row are header items inside it) instead of a fixed
-        // Column + a separately-scrolling app list below. Previously the storage
-        // panel never scrolled away, permanently eating screen height and
-        // squeezing the app list. Now scrolling the list also scrolls the
-        // header out of view, like any normal scrollable screen.
+        // Fix: everything is now ONE scrollable LazyColumn (storage card, tabs,
+        // filter chips, sort controls, select-all row are header items inside
+        // it) instead of a fixed Column + a separately-scrolling app list
+        // below. Previously the storage panel never scrolled away, permanently
+        // eating screen height and squeezing the app list.
         LazyColumn(
             modifier = Modifier.fillMaxWidth().padding(padding),
             contentPadding = PaddingValues(bottom = 16.dp)
@@ -283,6 +312,26 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             }
 
+            // Fix: Cache Clean and Force Stop are now separate options — each
+            // tab shows its own filtered list (Cache Clean hides apps with no
+            // cache to clear; Force Stop hides already-stopped apps and
+            // anything Android itself won't let you force-stop, like
+            // persistent system processes) and its own bulk action below.
+            item {
+                TabRow(selectedTabIndex = if (activeTab == AppTab.CACHE_CLEAN) 0 else 1) {
+                    Tab(
+                        selected = activeTab == AppTab.CACHE_CLEAN,
+                        onClick = { viewModel.setActiveTab(AppTab.CACHE_CLEAN) },
+                        text = { Text("Cache Clean") }
+                    )
+                    Tab(
+                        selected = activeTab == AppTab.FORCE_STOP,
+                        onClick = { viewModel.setActiveTab(AppTab.FORCE_STOP) },
+                        text = { Text("Force Stop") }
+                    )
+                }
+            }
+
             // Filter chips: All / User Apps / System Apps
             item {
                 Row(
@@ -303,6 +352,33 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                         selected = appFilter == AppFilter.SYSTEM,
                         onClick = { viewModel.setAppFilter(AppFilter.SYSTEM) },
                         label = { Text("System Apps") }
+                    )
+                }
+            }
+
+            // Sort controls: tap Size/Date to sort by it, tap again to flip
+            // ascending/descending — an arrow shows the active key + direction.
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Sort:", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+                    FilterChip(
+                        selected = sortKey == AppSortKey.SIZE,
+                        onClick = { viewModel.setSortKey(AppSortKey.SIZE) },
+                        label = { Text("Size") },
+                        trailingIcon = if (sortKey == AppSortKey.SIZE) {
+                            { SortDirectionIcon(sortAscending) }
+                        } else null
+                    )
+                    FilterChip(
+                        selected = sortKey == AppSortKey.DATE,
+                        onClick = { viewModel.setSortKey(AppSortKey.DATE) },
+                        label = { Text("Date") },
+                        trailingIcon = if (sortKey == AppSortKey.DATE) {
+                            { SortDirectionIcon(sortAscending) }
+                        } else null
                     )
                 }
             }
@@ -339,20 +415,22 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                     com.shohan.cleanspace.ui.components.EmptyState(
                         icon = Icons.Filled.Info,
                         title = "No Apps Found",
-                        subtitle = "Make sure Usage Access is granted, then tap refresh."
+                        subtitle = if (activeTab == AppTab.CACHE_CLEAN)
+                            "No apps currently have cache to clear."
+                        else
+                            "No stoppable apps right now — already stopped or protected apps are hidden."
                     )
                 }
             } else {
                 items(apps, key = { it.packageName }) { app ->
                     AppRow(
                         app = app,
+                        activeTab = activeTab,
                         shizukuReady = shizukuReady,
                         onToggleSelect = { viewModel.toggleAppSelection(app) },
                         onForceStopClick = { pendingForceStopApp = app },
                         onClearCacheClick = { viewModel.clearSingleAppCache(app) },
-                        onOpenSettingsClick = {
-                            context.startActivity(PermissionHelper.appSettingsIntent(context, app.packageName))
-                        },
+                        onOpenAppInfo = { openAppInfo(app) },
                         onToggleIgnore = { viewModel.toggleIgnore(app) }
                     )
                 }
@@ -361,15 +439,32 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
     }
 }
 
+@Composable
+private fun SortDirectionIcon(ascending: Boolean) {
+    Icon(
+        if (ascending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+        contentDescription = if (ascending) "Ascending" else "Descending",
+        modifier = Modifier.size(16.dp)
+    )
+}
+
+private fun formatLastUsed(timeMillis: Long): String {
+    if (timeMillis <= 0L) return "Never used"
+    return DateUtils.getRelativeTimeSpanString(
+        timeMillis, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS
+    ).toString()
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AppRow(
     app: AppStorageInfo,
+    activeTab: AppTab,
     shizukuReady: Boolean,
     onToggleSelect: () -> Unit,
     onForceStopClick: () -> Unit,
     onClearCacheClick: () -> Unit,
-    onOpenSettingsClick: () -> Unit,
+    onOpenAppInfo: () -> Unit,
     onToggleIgnore: () -> Unit
 ) {
     var showIgnoreMenu by remember { mutableStateOf(false) }
@@ -387,14 +482,15 @@ private fun AppRow(
                 )
             }
 
-            // Long-press the app name to add/remove it from the ignore list —
-            // a floating menu pops up right where you pressed.
-            androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f)) {
+            // Tap the app name to open its native App Info screen. Long-press
+            // it to add/remove it from the ignore list — a floating menu pops
+            // up right where you pressed.
+            Box(modifier = Modifier.weight(1f)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .combinedClickable(
-                            onClick = {},
+                            onClick = onOpenAppInfo,
                             onLongClick = { showIgnoreMenu = true }
                         )
                 ) {
@@ -411,7 +507,10 @@ private fun AppRow(
                         }
                     }
                     Text(
-                        "Cache: ${MainViewModel.formatBytes(app.cacheBytes)}  •  Total: ${MainViewModel.formatBytes(app.totalBytes)}",
+                        if (activeTab == AppTab.CACHE_CLEAN)
+                            "Cache: ${MainViewModel.formatBytes(app.cacheBytes)}  •  Total: ${MainViewModel.formatBytes(app.totalBytes)}"
+                        else
+                            "Size: ${MainViewModel.formatBytes(app.totalBytes)}  •  Last used: ${formatLastUsed(app.lastUsedTime)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (app.isIgnored) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                     )
@@ -428,17 +527,14 @@ private fun AppRow(
             }
 
             if (shizukuReady) {
-                if (!app.isIgnored) {
+                if (activeTab == AppTab.CACHE_CLEAN) {
+                    IconButton(onClick = onClearCacheClick) {
+                        Icon(Icons.Filled.CleaningServices, contentDescription = "Clear Cache")
+                    }
+                } else if (!app.isIgnored) {
                     IconButton(onClick = onForceStopClick) {
                         Icon(Icons.Filled.PowerSettingsNew, contentDescription = "Force Stop")
                     }
-                }
-                IconButton(onClick = onClearCacheClick) {
-                    Icon(Icons.Filled.CleaningServices, contentDescription = "Clear Cache")
-                }
-            } else {
-                IconButton(onClick = onOpenSettingsClick) {
-                    Icon(Icons.Filled.Info, contentDescription = "App Settings")
                 }
             }
         }

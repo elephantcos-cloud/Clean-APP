@@ -10,7 +10,11 @@ A simple, single-purpose Android app cache cleaner with Shizuku-powered force st
 | **App Cache Cleaner** | Per-app or bulk (multi-select) cache clearing via Shizuku |
 | **Force Stop** | Per-app or bulk force-stop via Shizuku, with confirmation |
 | **App Filter** | All / User Apps / System Apps |
+| **Cache Clean tab** | Shows only apps that currently have cache to clear |
+| **Force Stop tab** | Shows only apps that are running and safe to stop (hides already-stopped apps and persistent system processes Android itself won't let you force-stop) |
+| **Sort** | By size or last-used date, tap again to flip ascending/descending |
 | **Ignore List** | Long-press an app name to protect it from ever being force-stopped |
+| **Tap app name** | Opens that app's native App Info screen |
 | **Live progress** | Bulk actions show which app is being processed in real time |
 
 ## Build (GitHub Actions — no local setup needed)
