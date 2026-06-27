@@ -24,7 +24,9 @@ data class AppStorageInfo(
     // No launcher entry point — packageManager.getLaunchIntentForPackage == null.
     val hasLaunchIntent: Boolean = true,
     // Last-used timestamp from UsageStatsManager, 0 if never recorded.
-    val lastUsedTime: Long = 0L
+    val lastUsedTime: Long = 0L,
+    // Disabled via PackageManager.getApplicationEnabledSetting.
+    val isDisabled: Boolean = false
 ) {
     val totalBytes: Long get() = appBytes + cacheBytes + dataBytes
 
@@ -37,7 +39,7 @@ enum class AppFilter { ALL, USER, SYSTEM }
 
 enum class AppTab { CACHE_CLEAN, FORCE_STOP }
 
-enum class AppSortKey { SIZE, DATE }
+enum class AppSortKey { SIZE, DATE, NAME }
 
 enum class ThemeMode { LIGHT, DARK, SYSTEM }
 
@@ -59,4 +61,34 @@ data class BulkActionProgress(
     val currentAppName: String,
     val currentIndex: Int,
     val total: Int
+)
+
+enum class HistoryActionType { CACHE_CLEARED, FORCE_STOPPED, DATA_CLEARED, DISABLED, ENABLED, AUTO_CLEAN_RUN }
+
+data class HistoryEntry(
+    val timestamp: Long,
+    val action: HistoryActionType,
+    val appName: String,
+    val bytesFreed: Long = 0L
+)
+
+// A status message that can optionally offer a follow-up action (e.g. a
+// "Relaunch" button right after force-stopping an app) — plain text alone
+// can't carry that, so this replaced the old `String?` status message.
+data class StatusMessage(
+    val text: String,
+    val relaunchPackage: String? = null
+)
+
+enum class AutoCleanFrequency(val hours: Long) { DAILY(24), WEEKLY(168) }
+
+// Maps to concrete thresholds in AutoCleanWorker — not exposed as raw numbers
+// in Settings to keep the UI simple and avoid the user picking values that
+// don't actually do anything useful.
+enum class AutoCleanAggressiveness { CONSERVATIVE, BALANCED, AGGRESSIVE }
+
+data class AutoCleanSettings(
+    val enabled: Boolean = false,
+    val frequency: AutoCleanFrequency = AutoCleanFrequency.DAILY,
+    val aggressiveness: AutoCleanAggressiveness = AutoCleanAggressiveness.BALANCED
 )

@@ -1,8 +1,11 @@
 package com.shohan.cleanspace.ui.screens
 
+import android.graphics.Bitmap
 import android.text.format.DateUtils
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,14 +21,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.DismissDirection
+import androidx.compose.material.DismissValue
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.SwipeToDismiss
+import androidx.compose.material.rememberDismissState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
@@ -41,7 +54,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -56,7 +71,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -74,10 +91,13 @@ import com.shohan.cleanspace.viewmodel.MainViewModel
 @Composable
 fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
     val apps by viewModel.installedApps.collectAsState()
+    val appIcons by viewModel.appIcons.collectAsState()
     val appFilter by viewModel.appFilter.collectAsState()
     val activeTab by viewModel.activeTab.collectAsState()
     val sortKey by viewModel.sortKey.collectAsState()
     val sortAscending by viewModel.sortAscending.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val showProtected by viewModel.showProtected.collectAsState()
     val overview by viewModel.storageOverview.collectAsState()
     val isLoading by viewModel.appsLoading.collectAsState()
     val permissions by viewModel.permissions.collectAsState()
@@ -87,6 +107,8 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
     var pendingBulkClear by remember { mutableStateOf(false) }
     var pendingBulkForceStop by remember { mutableStateOf(false) }
     var pendingForceStopApp by remember { mutableStateOf<AppStorageInfo?>(null) }
+    var pendingDisableApp by remember { mutableStateOf<AppStorageInfo?>(null) }
+    var pendingClearDataApp by remember { mutableStateOf<AppStorageInfo?>(null) }
 
     LaunchedEffect(Unit) { viewModel.loadHome() }
 
@@ -116,6 +138,44 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
             },
             dismissButton = {
                 TextButton(onClick = { pendingForceStopApp = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Disable confirmation — only shown when disabling (enabling needs no
+    // confirmation, it's the safe/reversible direction).
+    pendingDisableApp?.let { app ->
+        AlertDialog(
+            onDismissRequest = { pendingDisableApp = null },
+            title = { Text("Disable ${app.appName}?") },
+            text = { Text("The app will stop running and disappear from the app drawer until you re-enable it here. It will not be uninstalled.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDisableApp = null
+                    viewModel.toggleAppEnabled(app)
+                }) { Text("Disable") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDisableApp = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Clear Data confirmation — the most destructive single-app action here,
+    // so the wording is deliberately blunt about what's lost.
+    pendingClearDataApp?.let { app ->
+        AlertDialog(
+            onDismissRequest = { pendingClearDataApp = null },
+            title = { Text("Clear ALL data for ${app.appName}?") },
+            text = { Text("This erases everything — login, settings, saved files — not just cache. The app resets to a fresh install. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingClearDataApp = null
+                    viewModel.clearSingleAppData(app)
+                }) { Text("Erase") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingClearDataApp = null }) { Text("Cancel") }
             }
         )
     }
@@ -191,9 +251,8 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
             )
         },
         bottomBar = {
-            // Fix: Cache Clean and Force Stop are now separate options — only the
-            // bulk button relevant to the active tab is ever shown, instead of
-            // both buttons always sitting side by side regardless of context.
+            // Cache Clean and Force Stop are separate options — only the bulk
+            // button relevant to the active tab is ever shown.
             if (selectedApps.isNotEmpty() && shizukuReady) {
                 BottomAppBar {
                     Text(
@@ -219,11 +278,6 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
             }
         }
     ) { padding ->
-        // Fix: everything is now ONE scrollable LazyColumn (storage card, tabs,
-        // filter chips, sort controls, select-all row are header items inside
-        // it) instead of a fixed Column + a separately-scrolling app list
-        // below. Previously the storage panel never scrolled away, permanently
-        // eating screen height and squeezing the app list.
         LazyColumn(
             modifier = Modifier.fillMaxWidth().padding(padding),
             contentPadding = PaddingValues(bottom = 16.dp)
@@ -312,11 +366,6 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             }
 
-            // Fix: Cache Clean and Force Stop are now separate options — each
-            // tab shows its own filtered list (Cache Clean hides apps with no
-            // cache to clear; Force Stop hides already-stopped apps and
-            // anything Android itself won't let you force-stop, like
-            // persistent system processes) and its own bulk action below.
             item {
                 TabRow(selectedTabIndex = if (activeTab == AppTab.CACHE_CLEAN) 0 else 1) {
                     Tab(
@@ -330,6 +379,25 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                         text = { Text("Force Stop") }
                     )
                 }
+            }
+
+            // Search by app name
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.setSearchQuery(it) },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    placeholder = { Text("Search apps") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = if (searchQuery.isNotEmpty()) {
+                        {
+                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                Icon(Icons.Filled.Clear, contentDescription = "Clear search")
+                            }
+                        }
+                    } else null,
+                    singleLine = true
+                )
             }
 
             // Filter chips: All / User Apps / System Apps
@@ -356,7 +424,7 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             }
 
-            // Sort controls: tap Size/Date to sort by it, tap again to flip
+            // Sort controls: tap Size/Date/Name to sort by it, tap again to flip
             // ascending/descending — an arrow shows the active key + direction.
             item {
                 Row(
@@ -368,18 +436,35 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                         selected = sortKey == AppSortKey.SIZE,
                         onClick = { viewModel.setSortKey(AppSortKey.SIZE) },
                         label = { Text("Size") },
-                        trailingIcon = if (sortKey == AppSortKey.SIZE) {
-                            { SortDirectionIcon(sortAscending) }
-                        } else null
+                        trailingIcon = if (sortKey == AppSortKey.SIZE) { { SortDirectionIcon(sortAscending) } } else null
                     )
                     FilterChip(
                         selected = sortKey == AppSortKey.DATE,
                         onClick = { viewModel.setSortKey(AppSortKey.DATE) },
                         label = { Text("Date") },
-                        trailingIcon = if (sortKey == AppSortKey.DATE) {
-                            { SortDirectionIcon(sortAscending) }
-                        } else null
+                        trailingIcon = if (sortKey == AppSortKey.DATE) { { SortDirectionIcon(sortAscending) } } else null
                     )
+                    FilterChip(
+                        selected = sortKey == AppSortKey.NAME,
+                        onClick = { viewModel.setSortKey(AppSortKey.NAME) },
+                        label = { Text("Name") },
+                        trailingIcon = if (sortKey == AppSortKey.NAME) { { SortDirectionIcon(sortAscending) } } else null
+                    )
+                }
+            }
+
+            // "Show protected apps" only matters on the Force Stop tab — Cache
+            // Clean was never filtering anything related to protection.
+            if (activeTab == AppTab.FORCE_STOP) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Show protected apps", style = MaterialTheme.typography.bodyMedium)
+                        Switch(checked = showProtected, onCheckedChange = { viewModel.setShowProtected(it) })
+                    }
                 }
             }
 
@@ -391,13 +476,20 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("${apps.size} apps", style = MaterialTheme.typography.bodyMedium)
-                        // Fix: ONE button in one place instead of two separate
-                        // "Select All" / "Unselect All" buttons side by side —
-                        // its label and action flip depending on current state.
+                        // ONE button in one place — label/action flip with state,
+                        // instead of separate "Select All" / "Unselect All" buttons.
                         TextButton(onClick = { viewModel.toggleSelectAllVisible() }) {
                             Text(if (allVisibleSelected) "Unselect All" else "Select All")
                         }
                     }
+                }
+                item {
+                    Text(
+                        "Tip: swipe a row to quickly clear its cache / force stop it",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                    )
                 }
             }
 
@@ -418,20 +510,26 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                         subtitle = if (activeTab == AppTab.CACHE_CLEAN)
                             "No apps currently have cache to clear."
                         else
-                            "No stoppable apps right now — already stopped or protected apps are hidden."
+                            "No stoppable apps right now — try \"Show protected apps\" to see why."
                     )
                 }
             } else {
                 items(apps, key = { it.packageName }) { app ->
                     AppRow(
                         app = app,
+                        icon = appIcons[app.packageName],
                         activeTab = activeTab,
                         shizukuReady = shizukuReady,
+                        showProtected = showProtected,
                         onToggleSelect = { viewModel.toggleAppSelection(app) },
                         onForceStopClick = { pendingForceStopApp = app },
                         onClearCacheClick = { viewModel.clearSingleAppCache(app) },
                         onOpenAppInfo = { openAppInfo(app) },
-                        onToggleIgnore = { viewModel.toggleIgnore(app) }
+                        onToggleIgnore = { viewModel.toggleIgnore(app) },
+                        onToggleEnabled = {
+                            if (app.isDisabled) viewModel.toggleAppEnabled(app) else pendingDisableApp = app
+                        },
+                        onClearDataClick = { pendingClearDataApp = app }
                     )
                 }
             }
@@ -455,88 +553,197 @@ private fun formatLastUsed(timeMillis: Long): String {
     ).toString()
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+// Why an app is being shown even though it would normally be excluded from
+// the Force Stop tab — only meaningful when "Show protected apps" is on.
+private fun protectionReason(app: AppStorageInfo): String? = when {
+    app.isIgnored -> "Ignored"
+    app.isStopped -> "Already stopped"
+    !app.canForceStop -> "Protected by Android"
+    else -> null
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterialApi::class)
 @Composable
 private fun AppRow(
     app: AppStorageInfo,
+    icon: Bitmap?,
     activeTab: AppTab,
     shizukuReady: Boolean,
+    showProtected: Boolean,
     onToggleSelect: () -> Unit,
     onForceStopClick: () -> Unit,
     onClearCacheClick: () -> Unit,
     onOpenAppInfo: () -> Unit,
-    onToggleIgnore: () -> Unit
+    onToggleIgnore: () -> Unit,
+    onToggleEnabled: () -> Unit,
+    onClearDataClick: () -> Unit
 ) {
-    var showIgnoreMenu by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    val reason = if (activeTab == AppTab.FORCE_STOP && showProtected) protectionReason(app) else null
+    val canActOnThis = activeTab != AppTab.FORCE_STOP || reason == null
+    val canSwipeAct = shizukuReady && canActOnThis && !app.isIgnored
 
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (shizukuReady) {
-                Checkbox(
-                    checked = app.selected,
-                    enabled = !app.isIgnored,
-                    onCheckedChange = { onToggleSelect() }
-                )
-            }
+    val rowContent: @Composable () -> Unit = {
+        Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (shizukuReady && canActOnThis) {
+                    Checkbox(
+                        checked = app.selected,
+                        enabled = !app.isIgnored,
+                        onCheckedChange = { onToggleSelect() }
+                    )
+                }
 
-            // Tap the app name to open its native App Info screen. Long-press
-            // it to add/remove it from the ignore list — a floating menu pops
-            // up right where you pressed.
-            Box(modifier = Modifier.weight(1f)) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .combinedClickable(
-                            onClick = onOpenAppInfo,
-                            onLongClick = { showIgnoreMenu = true }
+                if (icon != null) {
+                    Image(
+                        bitmap = icon.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.size(40.dp).clip(CircleShape)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                }
+
+                // Tap the app name to open its native App Info screen. Long-press
+                // it for more actions (ignore list, disable, clear data) — a
+                // floating menu pops up right where you pressed.
+                Box(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = onOpenAppInfo,
+                                onLongClick = { showMenu = true }
+                            )
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(app.appName, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                            if (app.isIgnored) {
+                                Spacer(Modifier.width(6.dp))
+                                Icon(
+                                    Icons.Filled.Lock,
+                                    contentDescription = "Ignored",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                            if (app.isDisabled) {
+                                Spacer(Modifier.width(6.dp))
+                                Icon(
+                                    Icons.Filled.Block,
+                                    contentDescription = "Disabled",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                        Text(
+                            if (activeTab == AppTab.CACHE_CLEAN)
+                                "Cache: ${MainViewModel.formatBytes(app.cacheBytes)}  •  Total: ${MainViewModel.formatBytes(app.totalBytes)}"
+                            else
+                                "Size: ${MainViewModel.formatBytes(app.totalBytes)}  •  Last used: ${formatLastUsed(app.lastUsedTime)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (app.isIgnored) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                         )
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(app.appName, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                        if (app.isIgnored) {
-                            Spacer(Modifier.width(6.dp))
-                            Icon(
-                                Icons.Filled.Lock,
-                                contentDescription = "Ignored",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.outline
+                        if (reason != null) {
+                            Text(
+                                reason,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error
                             )
                         }
                     }
-                    Text(
-                        if (activeTab == AppTab.CACHE_CLEAN)
-                            "Cache: ${MainViewModel.formatBytes(app.cacheBytes)}  •  Total: ${MainViewModel.formatBytes(app.totalBytes)}"
-                        else
-                            "Size: ${MainViewModel.formatBytes(app.totalBytes)}  •  Last used: ${formatLastUsed(app.lastUsedTime)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (app.isIgnored) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                DropdownMenu(expanded = showIgnoreMenu, onDismissRequest = { showIgnoreMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text(if (app.isIgnored) "Remove from Ignore List" else "Add to Ignore List") },
-                        onClick = {
-                            showIgnoreMenu = false
-                            onToggleIgnore()
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(if (app.isIgnored) "Remove from Ignore List" else "Add to Ignore List") },
+                            onClick = {
+                                showMenu = false
+                                onToggleIgnore()
+                            }
+                        )
+                        if (shizukuReady && !app.isIgnored) {
+                            DropdownMenuItem(
+                                text = { Text(if (app.isDisabled) "Enable App" else "Disable App") },
+                                onClick = {
+                                    showMenu = false
+                                    onToggleEnabled()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Clear Data (resets app)") },
+                                onClick = {
+                                    showMenu = false
+                                    onClearDataClick()
+                                }
+                            )
                         }
-                    )
-                }
-            }
-
-            if (shizukuReady) {
-                if (activeTab == AppTab.CACHE_CLEAN) {
-                    IconButton(onClick = onClearCacheClick) {
-                        Icon(Icons.Filled.CleaningServices, contentDescription = "Clear Cache")
                     }
-                } else if (!app.isIgnored) {
-                    IconButton(onClick = onForceStopClick) {
-                        Icon(Icons.Filled.PowerSettingsNew, contentDescription = "Force Stop")
+                }
+
+                if (shizukuReady && canActOnThis) {
+                    if (activeTab == AppTab.CACHE_CLEAN) {
+                        IconButton(onClick = onClearCacheClick) {
+                            Icon(Icons.Filled.CleaningServices, contentDescription = "Clear Cache")
+                        }
+                    } else if (!app.isIgnored) {
+                        IconButton(onClick = onForceStopClick) {
+                            Icon(Icons.Filled.PowerSettingsNew, contentDescription = "Force Stop")
+                        }
                     }
                 }
             }
         }
     }
+
+    // rememberDismissState must be called unconditionally on every
+    // recomposition of this row (Compose requires composable/remember calls
+    // happen in a stable order) — so it's always created here, and we branch
+    // on canSwipeAct afterward with a plain if/else rather than an early
+    // return before this call.
+    val dismissState = rememberDismissState(
+        confirmStateChange = { value ->
+            if (value != DismissValue.Default && canSwipeAct) {
+                if (activeTab == AppTab.CACHE_CLEAN) onClearCacheClick() else onForceStopClick()
+            }
+            false
+        }
+    )
+
+    if (!canSwipeAct) {
+        rowContent()
+        return
+    }
+
+    // Swipe gesture: swiping a row triggers its primary action (Clear Cache /
+    // Force Stop) through the SAME confirmation dialog the icon button uses —
+    // confirmStateChange always returns false so the row visually snaps back
+    // instead of disappearing (the list refreshes naturally once the action
+    // completes, removing it the normal way if it no longer qualifies).
+    val isCacheTab = activeTab == AppTab.CACHE_CLEAN
+    SwipeToDismiss(
+        state = dismissState,
+        directions = setOf(DismissDirection.EndToStart),
+        background = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .background(
+                        if (isCacheTab) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        shape = MaterialTheme.shapes.medium
+                    ),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    if (isCacheTab) Icons.Filled.CleaningServices else Icons.Filled.PowerSettingsNew,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 24.dp).size(28.dp),
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        },
+        dismissContent = { rowContent() }
+    )
 }

@@ -12,7 +12,20 @@ A simple, single-purpose Android app cache cleaner with Shizuku-powered force st
 | **App Filter** | All / User Apps / System Apps |
 | **Cache Clean tab** | Shows only apps that currently have cache to clear |
 | **Force Stop tab** | Shows only apps that are running and safe to stop (hides already-stopped apps and persistent system processes Android itself won't let you force-stop) |
-| **Sort** | By size or last-used date, tap again to flip ascending/descending |
+| **Sort** | By size, last-used date, or name — tap again to flip ascending/descending |
+| **Search** | Filter the app list by name |
+| **App icons** | Real app icons shown in the list |
+| **Default protected apps** | System UI, current launcher/dialer/SMS app, and CleanSpace itself are auto-protected on first run |
+| **Show protected apps** | Toggle to reveal why an app is hidden from Force Stop (ignored / already stopped / protected by Android) |
+| **Disable / Enable app** | Long-press an app name for this and the ignore-list toggle |
+| **Clear Data** | Full data wipe (long-press menu), separate from the quick cache-only clear, with a strong confirmation |
+| **Swipe to act** | Swipe a row to clear its cache / force stop it via the same confirmation dialog |
+| **History** | Settings → History shows a log of every cache clear / force stop / data clear / disable / enable, with timestamps |
+| **Relaunch after stop** | The snackbar after force-stopping an app offers a one-tap "Relaunch" |
+| **Ignore list export/import** | Settings → copy your ignore list as text, or paste one back in (e.g. after reinstalling) |
+| **Material You** | Optional wallpaper-based dynamic color on Android 12+ (Settings toggle) |
+| **Auto-Clean** | Rule-based background cache cleaning (Settings) — not a real AI/LLM model, works fully offline. Configurable frequency (daily/weekly) and aggressiveness (conservative/balanced/aggressive); automatically gets more aggressive when free space drops below 1 GB. Never touches ignored apps |
+| **Remembers your view** | Last filter/tab/sort/show-protected choice persists across restarts |
 | **Ignore List** | Long-press an app name to protect it from ever being force-stopped |
 | **Tap app name** | Opens that app's native App Info screen |
 | **Live progress** | Bulk actions show which app is being processed in real time |

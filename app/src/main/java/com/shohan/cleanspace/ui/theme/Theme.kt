@@ -1,12 +1,16 @@
 package com.shohan.cleanspace.ui.theme
 
 import android.app.Activity
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.shohan.cleanspace.data.models.ThemeMode
@@ -44,14 +48,28 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun CleanSpaceTheme(themeMode: ThemeMode, content: @Composable () -> Unit) {
+fun CleanSpaceTheme(
+    themeMode: ThemeMode,
+    useDynamicColor: Boolean = true,
+    content: @Composable () -> Unit
+) {
     // Fix 3: SYSTEM mode now correctly follows the device dark/light setting
     val darkTheme = when (themeMode) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
-    val colors = if (darkTheme) DarkColors else LightColors
+
+    // Material You: only available on Android 12+ (API 31). On older devices,
+    // or when the user has turned it off in Settings, this falls back to the
+    // app's own branded green palette below — useDynamicColor being true on
+    // an older device simply has no effect.
+    val context = LocalContext.current
+    val colors = if (useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else {
+        if (darkTheme) DarkColors else LightColors
+    }
 
     // Fix: status bar icon contrast. A static XML windowLightStatusBar value can
     // only be correct for ONE theme — since this app lets the user switch

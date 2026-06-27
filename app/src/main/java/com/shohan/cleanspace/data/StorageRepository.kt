@@ -3,11 +3,18 @@ package com.shohan.cleanspace.data
 import android.app.usage.StorageStatsManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import android.os.storage.StorageManager
+import android.provider.Telephony
+import android.telecom.TelecomManager
 import com.shohan.cleanspace.data.models.AppStorageInfo
 import com.shohan.cleanspace.data.models.StorageOverview
 import com.shohan.cleanspace.shizuku.ICacheService
@@ -65,6 +72,10 @@ class StorageRepository(private val context: Context) {
                 pm.getInstalledApplications(0).forEach { app ->
                     try {
                         val stats = ssm.queryStatsForUid(uuid, app.uid)
+                        val enabledSetting = try { pm.getApplicationEnabledSetting(app.packageName) } catch (_: Exception) { PackageManager.COMPONENT_ENABLED_STATE_DEFAULT }
+                        val isDisabled = enabledSetting == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ||
+                            enabledSetting == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER ||
+                            enabledSetting == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED
                         results.add(AppStorageInfo(
                             packageName = app.packageName,
                             appName = pm.getApplicationLabel(app).toString(),
@@ -75,13 +86,69 @@ class StorageRepository(private val context: Context) {
                             isStopped = (app.flags and ApplicationInfo.FLAG_STOPPED) != 0,
                             isPersistent = (app.flags and ApplicationInfo.FLAG_PERSISTENT) != 0,
                             hasLaunchIntent = pm.getLaunchIntentForPackage(app.packageName) != null,
-                            lastUsedTime = usageMap[app.packageName] ?: 0L
+                            lastUsedTime = usageMap[app.packageName] ?: 0L,
+                            isDisabled = isDisabled
                         ))
                     } catch (_: Exception) {}
                 }
             } catch (_: Exception) {}
         }
         results.sortedByDescending { it.cacheBytes }
+    }
+
+    // App icons, decoded to small fixed-size bitmaps up front so Compose never
+    // has to touch a Drawable directly. Loaded once per app-list refresh; a
+    // missing/failed icon for one package just leaves it out of the map (the
+    // UI falls back to a placeholder), it never fails the whole load.
+    suspend fun loadAppIcons(packageNames: List<String>): Map<String, Bitmap> = withContext(Dispatchers.IO) {
+        val pm = context.packageManager
+        val result = HashMap<String, Bitmap>()
+        val sizePx = 96
+        packageNames.forEach { pkg ->
+            try {
+                result[pkg] = drawableToBitmap(pm.getApplicationIcon(pkg), sizePx)
+            } catch (_: Exception) {}
+        }
+        result
+    }
+
+    private fun drawableToBitmap(drawable: Drawable, sizePx: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, sizePx, sizePx)
+        drawable.draw(canvas)
+        return bitmap
+    }
+
+    // Well-known critical packages + whatever the device currently has set as
+    // default launcher/dialer/SMS app — used to seed the ignore list once on
+    // first run so a new user can't accidentally force-stop something that
+    // can hang the phone (this is exactly what happened before this existed).
+    fun detectDefaultProtectedPackages(): Set<String> {
+        val pm = context.packageManager
+        val result = mutableSetOf<String>()
+        listOf(
+            "com.android.systemui",
+            "android",
+            "com.android.settings",
+            "com.android.phone",
+            "com.android.server.telecom"
+        ).forEach { pkg ->
+            try { pm.getApplicationInfo(pkg, 0); result.add(pkg) } catch (_: Exception) {}
+        }
+        try {
+            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            pm.resolveActivity(homeIntent, 0)?.activityInfo?.packageName?.let { result.add(it) }
+        } catch (_: Exception) {}
+        try {
+            val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+            telecom?.defaultDialerPackage?.let { result.add(it) }
+        } catch (_: Exception) {}
+        try {
+            Telephony.Sms.getDefaultSmsPackage(context)?.let { result.add(it) }
+        } catch (_: Exception) {}
+        result.add(context.packageName) // never let CleanSpace force-stop/disable itself
+        return result
     }
 
     // Single-quote shell escaping: wrapping a value in single quotes and escaping
@@ -103,10 +170,37 @@ class StorageRepository(private val context: Context) {
             } catch (_: Exception) { false }
         }
 
+    // Full data wipe — equivalent to Settings' "Clear Storage" button. Resets
+    // the app to a fresh-install state: logs the user out, erases local
+    // files/settings. Far more destructive than clearAppCache above.
+    suspend fun clearAppData(service: ICacheService, packageName: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                service.runCommand("pm clear ${shellQuote(packageName)}")
+                true
+            } catch (_: Exception) { false }
+        }
+
     suspend fun forceStopApp(service: ICacheService, packageName: String): Boolean =
         withContext(Dispatchers.IO) {
             try {
                 service.runCommand("am force-stop ${shellQuote(packageName)}")
+                true
+            } catch (_: Exception) { false }
+        }
+
+    suspend fun disableApp(service: ICacheService, packageName: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                service.runCommand("pm disable-user --user 0 ${shellQuote(packageName)}")
+                true
+            } catch (_: Exception) { false }
+        }
+
+    suspend fun enableApp(service: ICacheService, packageName: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                service.runCommand("pm enable ${shellQuote(packageName)}")
                 true
             } catch (_: Exception) { false }
         }

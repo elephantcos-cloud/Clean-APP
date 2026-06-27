@@ -34,7 +34,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val themeMode by viewModel.themeMode.collectAsState()
-            CleanSpaceTheme(themeMode = themeMode) {
+            val useDynamicColor by viewModel.useDynamicColor.collectAsState()
+            CleanSpaceTheme(themeMode = themeMode, useDynamicColor = useDynamicColor) {
                 CleanSpaceRoot(viewModel = viewModel)
             }
         }
