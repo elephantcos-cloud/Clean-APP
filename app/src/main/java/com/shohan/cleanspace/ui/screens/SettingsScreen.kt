@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -54,7 +57,7 @@ import com.shohan.cleanspace.viewmodel.MainViewModel
 fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
     val themeMode by viewModel.themeMode.collectAsState()
     val useDynamicColor by viewModel.useDynamicColor.collectAsState()
-    val ignoredPackages by viewModel.ignoredPackages.collectAsState()
+    val ignoredApps by viewModel.ignoredAppsInfo.collectAsState()
     val autoClean by viewModel.autoCleanSettings.collectAsState()
     val context = LocalContext.current
 
@@ -102,7 +105,13 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(padding)
+                .padding(16.dp)
+        ) {
             Text("Theme", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
 
@@ -201,10 +210,31 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
             Text("Ignore List", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
             Text(
-                "${ignoredPackages.size} apps protected from force-stop and Auto-Clean",
-                style = MaterialTheme.typography.bodyMedium,
+                "Protected from force-stop and Auto-Clean. Tap ✕ to remove, or long-press an app's name on the main screen to add one.",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(Modifier.height(8.dp))
+            if (ignoredApps.isEmpty()) {
+                Text(
+                    "No apps ignored yet.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                ignoredApps.forEach { app ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(app.appName, style = MaterialTheme.typography.bodyMedium)
+                        IconButton(onClick = { viewModel.toggleIgnore(app) }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Remove ${app.appName} from ignore list")
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(8.dp))
             Row {
                 OutlinedButton(onClick = {

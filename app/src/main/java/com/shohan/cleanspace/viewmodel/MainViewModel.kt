@@ -64,6 +64,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _ignoredPackages = MutableStateFlow<Set<String>>(emptySet())
     val ignoredPackages: StateFlow<Set<String>> = _ignoredPackages.asStateFlow()
 
+    // Full AppStorageInfo (so the name is available) for every ignored
+    // package, independent of whatever tab/filter/search is currently active —
+    // _rawApps always holds every installed app once loadHome() has run once.
+    val ignoredAppsInfo: StateFlow<List<AppStorageInfo>> =
+        combine(_rawApps, _ignoredPackages) { apps, ignored ->
+            apps.filter { it.packageName in ignored }
+                .map { it.copy(isIgnored = true) }
+                .sortedBy { it.appName.lowercase() }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     private val _appFilter = MutableStateFlow(AppFilter.ALL)
     val appFilter: StateFlow<AppFilter> = _appFilter.asStateFlow()
 

@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -691,6 +692,11 @@ private fun AppRow(
                         IconButton(onClick = onForceStopClick) {
                             Icon(Icons.Filled.PowerSettingsNew, contentDescription = "Force Stop")
                         }
+                    }
+                }
+                if (shizukuReady) {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                     }
                 }
             }
