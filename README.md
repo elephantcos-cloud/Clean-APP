@@ -24,7 +24,7 @@ A simple, single-purpose Android app cache cleaner with Shizuku-powered force st
 | **Relaunch after stop** | The snackbar after force-stopping an app offers a one-tap "Relaunch" |
 | **Ignore list export/import** | Settings → copy your ignore list as text, or paste one back in (e.g. after reinstalling) |
 | **Material You** | Optional wallpaper-based dynamic color on Android 12+ (Settings toggle) |
-| **Auto-Clean** | Rule-based background cache cleaning (Settings) — not a real AI/LLM model, works fully offline. Configurable frequency (daily/weekly) and aggressiveness (conservative/balanced/aggressive); automatically gets more aggressive when free space drops below 1 GB. Never touches ignored apps |
+| **Auto-Clean** | Rule-based background cache cleaning (Settings) — not a real AI/LLM model, works fully offline. Scores every app by cache size + idle time, cleans only the top candidates per run, and discounts apps whose cache regrows fast (a sign it's actively used). Escalates through Low (<1GB/<10%) and Critical (<300MB) storage tiers, cleaning just enough to recover. Never touches ignored apps or anything used in the last hour |
 | **Remembers your view** | Last filter/tab/sort/show-protected choice persists across restarts |
 | **Ignore List** | Long-press an app name to protect it from ever being force-stopped |
 | **Tap app name** | Opens that app's native App Info screen |

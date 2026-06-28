@@ -140,7 +140,7 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
             Text("Auto-Clean", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Automatically clears cache for apps with a large cache that haven't been used in a while — runs in the background via Shizuku. Rule-based, not AI: works fully offline, no network or account needed.",
+                "Scores every app by cache size and idle time, then clears only the top candidates each run — and skips apps whose cache keeps regrowing fast (a sign it's actively used). Runs in the background via Shizuku. Rule-based, not AI: fully offline, no network or account needed.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -180,7 +180,7 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
 
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Ignored apps are never touched. When free space drops below 1 GB, Auto-Clean temporarily uses Aggressive settings regardless of this choice. Actual run timing depends on Android's battery optimization — this is a minimum interval, not a guarantee.",
+                    "Ignored apps and anything used in the last hour are never touched. Below 1 GB (or 10%) free space, Auto-Clean temporarily escalates to Aggressive; below 300 MB it escalates further and keeps going until enough is freed. Actual run timing depends on Android's battery optimization — this is a minimum interval, not a guarantee.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -44,7 +44,7 @@ fun DonutChart(
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = size.minDimension * 0.13f
+            val strokeWidth = size.minDimension * 0.10f
             val diameter = size.minDimension - strokeWidth
             val topLeft = Offset(
                 (size.width - diameter) / 2f,
@@ -69,7 +69,11 @@ fun DonutChart(
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = centerLabel, style = MaterialTheme.typography.headlineMedium)
-            Text(text = centerSubLabel, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = centerSubLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

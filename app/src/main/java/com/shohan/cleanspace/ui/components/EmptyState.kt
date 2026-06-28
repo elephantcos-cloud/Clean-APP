@@ -1,9 +1,6 @@
 package com.shohan.cleanspace.ui.components
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -18,7 +15,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -33,17 +32,12 @@ fun EmptyState(
     subtitle: String,
     modifier: Modifier = Modifier
 ) {
-    // Fix 1: animateFloat (not animateFloatAsState) — InfiniteTransition API
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_scale"
-    )
+    // A single settle-in (not a perpetual loop) — calmer and more in line
+    // with a professional tool than an icon that breathes forever.
+    val scale = remember { Animatable(0.9f) }
+    LaunchedEffect(Unit) {
+        scale.animateTo(1f, animationSpec = tween(350))
+    }
 
     Column(
         modifier = modifier
@@ -54,7 +48,7 @@ fun EmptyState(
         Box(
             modifier = Modifier
                 .size(88.dp)
-                .scale(pulse)
+                .scale(scale.value)
                 .background(
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
                     CircleShape
