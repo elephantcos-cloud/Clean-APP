@@ -96,6 +96,20 @@ class StorageRepository(private val context: Context) {
         results.sortedByDescending { it.cacheBytes }
     }
 
+    // Single-package cache size lookup — used for the quick post-clean
+    // regrowth check (RegrowthCheckWorker), so that check doesn't have to
+    // re-scan every installed app just to look at one of them.
+    suspend fun getCacheBytesFor(packageName: String): Long? = withContext(Dispatchers.IO) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !PermissionHelper.hasUsageAccess(context)) return@withContext null
+        try {
+            val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
+            val ssm = context.getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
+            val sm = context.getSystemService(Context.STORAGE_SERVICE) as StorageManager
+            val uuid = sm.getUuidForPath(context.dataDir)
+            ssm.queryStatsForUid(uuid, appInfo.uid).cacheBytes
+        } catch (_: Exception) { null }
+    }
+
     // App icons, decoded to small fixed-size bitmaps up front so Compose never
     // has to touch a Drawable directly. Loaded once per app-list refresh; a
     // missing/failed icon for one package just leaves it out of the map (the

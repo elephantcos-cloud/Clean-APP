@@ -201,7 +201,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             autoCleanPreference.settings.collect {
                 _autoCleanSettings.value = it
-                AutoCleanScheduler.apply(getApplication<Application>(), it)
+                AutoCleanScheduler.ensureScheduled(getApplication<Application>(), it)
             }
         }
         viewModelScope.launch {
@@ -272,7 +272,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun updateAutoClean(transform: (AutoCleanSettings) -> AutoCleanSettings) {
         viewModelScope.launch {
-            autoCleanPreference.save(transform(_autoCleanSettings.value))
+            val updated = transform(_autoCleanSettings.value)
+            autoCleanPreference.save(updated)
+            AutoCleanScheduler.reschedule(getApplication<Application>(), updated)
         }
     }
 
