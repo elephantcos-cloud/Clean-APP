@@ -1,9 +1,13 @@
 package com.shohan.cleanspace.ui.screens
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.pm.PackageManager
 import android.os.Build
 import com.shohan.cleanspace.BuildConfig
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.shohan.cleanspace.data.models.AutoCleanAggressiveness
 import com.shohan.cleanspace.data.models.AutoCleanFrequency
@@ -63,6 +68,25 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
 
     var showImportDialog by remember { mutableStateOf(false) }
     var importText by remember { mutableStateOf("") }
+
+    // Only relevant on Android 13+ — POST_NOTIFICATIONS is a runtime
+    // permission there. This is requested ONLY when the person turns the
+    // "Notify when Auto-Clean runs" switch on below, never proactively.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* The setting itself is already saved either way; if denied, the
+           notification call simply no-ops until permission is granted
+           later (e.g. from system Settings), with no need to re-toggle. */ }
+
+    fun onToggleAutoCleanNotify(enabled: Boolean) {
+        viewModel.setAutoCleanNotify(enabled)
+        if (enabled &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     if (showImportDialog) {
         AlertDialog(
@@ -137,6 +161,18 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
             Divider()
             Spacer(Modifier.height(16.dp))
 
+            Text("Quick Settings Tile", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "CleanSpace adds a \"Clear Cache\" tile for your notification shade's Quick Settings — edit your Quick Settings and drag it in for one-tap cleaning without opening the app.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(Modifier.height(24.dp))
+            Divider()
+            Spacer(Modifier.height(16.dp))
+
             Text("Auto-Clean", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
             Text(
@@ -177,6 +213,19 @@ fun SettingsScreen(viewModel: MainViewModel, navController: NavController) {
                     "Aggressive — clears more, more often",
                     AutoCleanAggressiveness.AGGRESSIVE, autoClean.aggressiveness
                 ) { viewModel.setAutoCleanAggressiveness(it) }
+
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Notify when Auto-Clean runs", style = MaterialTheme.typography.bodyMedium)
+                    Switch(
+                        checked = autoClean.notifyOnClean,
+                        onCheckedChange = { onToggleAutoCleanNotify(it) }
+                    )
+                }
 
                 Spacer(Modifier.height(4.dp))
                 Text(

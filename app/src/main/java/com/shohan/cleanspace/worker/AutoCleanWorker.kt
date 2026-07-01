@@ -17,6 +17,7 @@ import com.shohan.cleanspace.data.models.AppStorageInfo
 import com.shohan.cleanspace.data.models.AutoCleanAggressiveness
 import com.shohan.cleanspace.data.models.HistoryActionType
 import com.shohan.cleanspace.data.models.HistoryEntry
+import com.shohan.cleanspace.notification.AutoCleanNotifier
 import com.shohan.cleanspace.shizuku.ShizukuHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -252,6 +253,9 @@ class AutoCleanWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 bytesFreed = freedBytes
             )
         )
+        if (cleanedCount > 0 && settings.notifyOnClean) {
+            AutoCleanNotifier.notifyRunComplete(applicationContext, cleanedCount, freedBytes)
+        }
         return Result.success()
     }
 

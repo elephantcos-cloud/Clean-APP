@@ -270,6 +270,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAutoCleanAggressiveness(level: AutoCleanAggressiveness) = updateAutoClean { it.copy(aggressiveness = level) }
 
+    fun setAutoCleanNotify(enabled: Boolean) = updateAutoClean { it.copy(notifyOnClean = enabled) }
+
     private fun updateAutoClean(transform: (AutoCleanSettings) -> AutoCleanSettings) {
         viewModelScope.launch {
             val updated = transform(_autoCleanSettings.value)
@@ -312,7 +314,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _storageOverview.value = repository.getStorageOverview()
                 val apps = repository.getInstalledApps()
                 _rawApps.value = apps
-                _appIcons.value = repository.loadAppIcons(apps.map { it.packageName })
+                // Only decode icons we don't already have cached. loadHome()
+                // runs after nearly every action (clear cache, force stop,
+                // disable, bulk actions, pull-to-refresh...) and a person's
+                // set of installed apps rarely changes between one action and
+                // the next, so re-decoding all of them from scratch every
+                // time was pure wasted work — this makes every refresh after
+                // the first effectively instant for icons. Also prunes icons
+                // for apps that are no longer installed, so the cache doesn't
+                // grow unbounded over long-term use.
+                val currentPackages = apps.map { it.packageName }.toSet()
+                val prunedIcons = _appIcons.value.filterKeys { it in currentPackages }
+                val missing = currentPackages.filter { it !in prunedIcons }
+                _appIcons.value = if (missing.isNotEmpty()) {
+                    prunedIcons + repository.loadAppIcons(missing)
+                } else {
+                    prunedIcons
+                }
             } finally { _appsLoading.value = false }
         }
     }

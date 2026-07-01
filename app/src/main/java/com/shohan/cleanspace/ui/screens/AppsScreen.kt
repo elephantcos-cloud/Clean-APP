@@ -26,6 +26,9 @@ import androidx.compose.material.DismissDirection
 import androidx.compose.material.DismissValue
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.SwipeToDismiss
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.rememberDismissState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -75,7 +78,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.shohan.cleanspace.data.PermissionHelper
@@ -88,7 +93,7 @@ import com.shohan.cleanspace.ui.components.DonutSlice
 import com.shohan.cleanspace.ui.theme.Emerald600
 import com.shohan.cleanspace.viewmodel.MainViewModel
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalMaterialApi::class)
 @Composable
 fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
     val apps by viewModel.installedApps.collectAsState()
@@ -127,91 +132,56 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
     // Single app force-stop confirmation — mirrors Android's own native
     // "Force stop?" warning dialog, since force-stopping can make an app misbehave.
     pendingForceStopApp?.let { app ->
-        AlertDialog(
-            onDismissRequest = { pendingForceStopApp = null },
-            title = { Text("Force stop ${app.appName}?") },
-            text = { Text("If you force stop an app, it may misbehave.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingForceStopApp = null
-                    viewModel.forceStopSingleApp(app)
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingForceStopApp = null }) { Text("Cancel") }
-            }
+        ConfirmActionDialog(
+            title = "Force stop ${app.appName}?",
+            text = "If you force stop an app, it may misbehave.",
+            confirmLabel = "OK",
+            onConfirm = { viewModel.forceStopSingleApp(app) },
+            onDismiss = { pendingForceStopApp = null }
         )
     }
 
     // Disable confirmation — only shown when disabling (enabling needs no
     // confirmation, it's the safe/reversible direction).
     pendingDisableApp?.let { app ->
-        AlertDialog(
-            onDismissRequest = { pendingDisableApp = null },
-            title = { Text("Disable ${app.appName}?") },
-            text = { Text("The app will stop running and disappear from the app drawer until you re-enable it here. It will not be uninstalled.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingDisableApp = null
-                    viewModel.toggleAppEnabled(app)
-                }) { Text("Disable") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDisableApp = null }) { Text("Cancel") }
-            }
+        ConfirmActionDialog(
+            title = "Disable ${app.appName}?",
+            text = "The app will stop running and disappear from the app drawer until you re-enable it here. It will not be uninstalled.",
+            confirmLabel = "Disable",
+            onConfirm = { viewModel.toggleAppEnabled(app) },
+            onDismiss = { pendingDisableApp = null }
         )
     }
 
     // Clear Data confirmation — the most destructive single-app action here,
     // so the wording is deliberately blunt about what's lost.
     pendingClearDataApp?.let { app ->
-        AlertDialog(
-            onDismissRequest = { pendingClearDataApp = null },
-            title = { Text("Clear ALL data for ${app.appName}?") },
-            text = { Text("This erases everything — login, settings, saved files — not just cache. The app resets to a fresh install. This cannot be undone.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingClearDataApp = null
-                    viewModel.clearSingleAppData(app)
-                }) { Text("Erase") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingClearDataApp = null }) { Text("Cancel") }
-            }
+        ConfirmActionDialog(
+            title = "Clear ALL data for ${app.appName}?",
+            text = "This erases everything — login, settings, saved files — not just cache. The app resets to a fresh install. This cannot be undone.",
+            confirmLabel = "Erase",
+            onConfirm = { viewModel.clearSingleAppData(app) },
+            onDismiss = { pendingClearDataApp = null }
         )
     }
 
     if (pendingBulkClear) {
-        AlertDialog(
-            onDismissRequest = { pendingBulkClear = false },
-            title = { Text("Clear cache for ${selectedApps.size} apps?") },
-            text = { Text("This will free up approximately ${MainViewModel.formatBytes(selectedCacheBytes)}.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingBulkClear = false
-                    viewModel.clearSelectedAppsCache()
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingBulkClear = false }) { Text("Cancel") }
-            }
+        ConfirmActionDialog(
+            title = "Clear cache for ${selectedApps.size} apps?",
+            text = "This will free up approximately ${MainViewModel.formatBytes(selectedCacheBytes)}.",
+            confirmLabel = "OK",
+            onConfirm = { viewModel.clearSelectedAppsCache() },
+            onDismiss = { pendingBulkClear = false }
         )
     }
 
     if (pendingBulkForceStop) {
-        AlertDialog(
-            onDismissRequest = { pendingBulkForceStop = false },
-            title = { Text("Force stop ${selectedApps.size} apps?") },
-            text = { Text("If you force stop these apps, they may misbehave.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingBulkForceStop = false
-                    viewModel.forceStopSelectedApps()
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingBulkForceStop = false }) { Text("Cancel") }
-            }
+        ConfirmActionDialog(
+            title = "Force stop ${selectedApps.size} apps?",
+            text = "If you force stop these apps, they may misbehave.",
+            confirmLabel = "OK",
+            onConfirm = { viewModel.forceStopSelectedApps() },
+            onDismiss = { pendingBulkForceStop = false }
         )
     }
 
@@ -279,8 +249,18 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
             }
         }
     ) { padding ->
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = isLoading,
+            onRefresh = { viewModel.loadHome() }
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .pullRefresh(pullRefreshState)
+        ) {
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().padding(padding),
+            modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
             item {
@@ -535,7 +515,46 @@ fun AppsScreen(viewModel: MainViewModel, navController: NavController) {
                 }
             }
         }
+        PullRefreshIndicator(
+            refreshing = isLoading,
+            state = pullRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter),
+            backgroundColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.primary
+        )
+        }
     }
+}
+
+// Shared confirmation dialog used by every destructive single/bulk action in
+// this screen (force stop, disable, clear data, bulk clear, bulk force stop)
+// — was previously 5 separately hand-written AlertDialogs with near-identical
+// structure. Consolidating them here also means haptic feedback on confirm
+// only needs to be wired up once instead of 5 times.
+@Composable
+private fun ConfirmActionDialog(
+    title: String,
+    text: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(text) },
+        confirmButton = {
+            TextButton(onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onDismiss()
+                onConfirm()
+            }) { Text(confirmLabel) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
@@ -708,9 +727,11 @@ private fun AppRow(
     // happen in a stable order) — so it's always created here, and we branch
     // on canSwipeAct afterward with a plain if/else rather than an early
     // return before this call.
+    val haptics = LocalHapticFeedback.current
     val dismissState = rememberDismissState(
         confirmStateChange = { value ->
             if (value != DismissValue.Default && canSwipeAct) {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 if (activeTab == AppTab.CACHE_CLEAN) onClearCacheClick() else onForceStopClick()
             }
             false

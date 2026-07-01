@@ -90,5 +90,9 @@ enum class AutoCleanAggressiveness { CONSERVATIVE, BALANCED, AGGRESSIVE }
 data class AutoCleanSettings(
     val enabled: Boolean = false,
     val frequency: AutoCleanFrequency = AutoCleanFrequency.DAILY,
-    val aggressiveness: AutoCleanAggressiveness = AutoCleanAggressiveness.BALANCED
+    val aggressiveness: AutoCleanAggressiveness = AutoCleanAggressiveness.BALANCED,
+    // Off by default — notifications are only ever turned on by an explicit
+    // user action in Settings (which is also when the POST_NOTIFICATIONS
+    // runtime permission gets requested, never on app launch).
+    val notifyOnClean: Boolean = false
 )

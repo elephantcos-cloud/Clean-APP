@@ -15,6 +15,7 @@ class AutoCleanPreference(private val context: Context) {
     private val enabledKey = booleanPreferencesKey("auto_clean_enabled")
     private val frequencyKey = stringPreferencesKey("auto_clean_frequency")
     private val aggressivenessKey = stringPreferencesKey("auto_clean_aggressiveness")
+    private val notifyKey = booleanPreferencesKey("auto_clean_notify")
 
     val settings: Flow<AutoCleanSettings> = context.cleanSpaceDataStore.data.map { prefs ->
         AutoCleanSettings(
@@ -22,7 +23,8 @@ class AutoCleanPreference(private val context: Context) {
             frequency = runCatching { AutoCleanFrequency.valueOf(prefs[frequencyKey] ?: "") }
                 .getOrDefault(AutoCleanFrequency.DAILY),
             aggressiveness = runCatching { AutoCleanAggressiveness.valueOf(prefs[aggressivenessKey] ?: "") }
-                .getOrDefault(AutoCleanAggressiveness.BALANCED)
+                .getOrDefault(AutoCleanAggressiveness.BALANCED),
+            notifyOnClean = prefs[notifyKey] ?: false
         )
     }
 
@@ -31,6 +33,7 @@ class AutoCleanPreference(private val context: Context) {
             prefs[enabledKey] = settings.enabled
             prefs[frequencyKey] = settings.frequency.name
             prefs[aggressivenessKey] = settings.aggressiveness.name
+            prefs[notifyKey] = settings.notifyOnClean
         }
     }
 }

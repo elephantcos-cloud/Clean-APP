@@ -6,6 +6,9 @@
         tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Only used if the user explicitly turns on "Notify when Auto-Clean
+         runs" in Settings; requested at runtime at that point, never on launch. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"
@@ -33,6 +36,18 @@
             android:enabled="true"
             android:exported="true"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <!-- Quick Settings tile: one-tap "Clear Cache" without opening the app. -->
+        <service
+            android:name=".tile.CacheCleanTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_clean"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICKSETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
     </application>
 

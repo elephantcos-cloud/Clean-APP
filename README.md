@@ -29,6 +29,10 @@ A simple, single-purpose Android app cache cleaner with Shizuku-powered force st
 | **Ignore List** | Long-press an app name to protect it from ever being force-stopped |
 | **Tap app name** | Opens that app's native App Info screen |
 | **Live progress** | Bulk actions show which app is being processed in real time |
+| **Pull to refresh** | Pull down the list to refresh, alongside the toolbar refresh button |
+| **Quick Settings Tile** | A "Clear Cache" tile you can add to your notification shade for one-tap cleaning without opening the app |
+| **Auto-Clean notifications** | Optional (Settings, off by default) — a low-priority notification summarizing what Auto-Clean cleared in the background |
+| **Haptic feedback** | A light tactile tick on destructive confirmations (force stop, disable, clear data) and completed swipe actions |
 
 ## Build (GitHub Actions — no local setup needed)
 
@@ -70,6 +74,7 @@ GitHub Actions will automatically build a debug APK. Download it from the **Acti
 |-----------|---------|
 | Usage Access | Show per-app cache/storage size |
 | Shizuku | Required to actually clear cache / force-stop apps |
+| Notifications (optional) | Only requested if you turn on "Notify when Auto-Clean runs" in Settings — Android 13+ only |
 
 ## Shizuku Setup (Wireless Debugging — no PC needed)
 
@@ -85,7 +90,7 @@ GitHub Actions will automatically build a debug APK. Download it from the **Acti
 - Kotlin 1.9.10 · Compose BOM 2023.10.01 · Material Design 3
 - `compileSdk`/`targetSdk` 34 · `minSdk` 24 · Java 17 · AGP 8.1.4
 - Storage overview: StatFs (accurate, no category double-counting); per-app stats via StorageStatsManager
-- Icon: Emerald green background + upward arrow
+- Icon: custom circular sunset/mountain artwork, generated at every mipmap density
 
 ## Local Gradle wrapper note
 
